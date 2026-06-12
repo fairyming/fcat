@@ -1,0 +1,82 @@
+import AppKit
+import Carbon
+import SwiftUI
+
+public struct HotKeyRecorderView: View {
+    @ObservedObject private var viewModel: SettingsViewModel
+    @State private var isRecording = false
+    @State private var monitor: Any?
+    private let saveHotKey: (HotKey) -> Void
+
+    public init(viewModel: SettingsViewModel, saveHotKey: @escaping (HotKey) -> Void) {
+        self.viewModel = viewModel
+        self.saveHotKey = saveHotKey
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Global Shortcut")
+                .font(.title2.bold())
+            Text("Press any key combination to set the shortcut for showing and hiding clipboard history.")
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 12) {
+                Button(isRecording ? "Press shortcut now..." : "Record Shortcut") {
+                    startRecording()
+                }
+                .controlSize(.large)
+
+                if let hotKey = viewModel.hotKey {
+                    Text(hotKey.displayString)
+                        .font(.title3.monospaced().bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.15)))
+                }
+
+                if viewModel.hasHotKey {
+                    Button("Clear") {
+                        viewModel.save(hotKey: nil)
+                        saveHotKey(HotKey(keyCode: 0, modifiers: 0))
+                    }
+                    .controlSize(.small)
+                }
+            }
+
+            if viewModel.hasHotKey && !isRecording {
+                Text("Shortcut saved. Open Settings from the menu bar to change it later.")
+                    .foregroundStyle(.green)
+                    .font(.caption)
+            }
+        }
+        .padding(24)
+        .frame(width: 460, height: 220)
+        .onDisappear { stopRecording() }
+    }
+
+    private func startRecording() {
+        isRecording = true
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let modifiers = UInt32(event.modifierFlags.rawValue)
+            let keyCode = UInt32(event.keyCode)
+
+            // Require at least one modifier (Cmd, Option, Control, or Shift)
+            let requiredModifiers: UInt32 = UInt32(cmdKey | optionKey | controlKey | shiftKey)
+            if modifiers & requiredModifiers == 0 { return event }
+
+            let hotKey = HotKey(keyCode: keyCode, modifiers: modifiers)
+            viewModel.save(hotKey: hotKey)
+            saveHotKey(hotKey)
+            stopRecording()
+            return nil // consume the event
+        }
+    }
+
+    private func stopRecording() {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+        isRecording = false
+    }
+}

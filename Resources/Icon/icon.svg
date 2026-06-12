@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Background circle -->
+  <circle cx="512" cy="512" r="460" fill="#FFF8F0" stroke="#3D3D3D" stroke-width="20"/>
+
+  <!-- Left ear outline -->
+  <path d="M 230 280 L 170 80 L 370 230" fill="none" stroke="#3D3D3D" stroke-width="18" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Left ear inner line -->
+  <path d="M 255 250 L 200 110 L 350 225" fill="none" stroke="#3D3D3D" stroke-width="10" stroke-linejoin="round" stroke-linecap="round" opacity="0.35"/>
+
+  <!-- Right ear outline -->
+  <path d="M 794 280 L 854 80 L 654 230" fill="none" stroke="#3D3D3D" stroke-width="18" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Right ear inner line -->
+  <path d="M 769 250 L 824 110 L 674 225" fill="none" stroke="#3D3D3D" stroke-width="10" stroke-linejoin="round" stroke-linecap="round" opacity="0.35"/>
+
+  <!-- Head outline -->
+  <circle cx="512" cy="530" r="280" fill="none" stroke="#3D3D3D" stroke-width="18"/>
+
+  <!-- Eyes - filled dots -->
+  <circle cx="400" cy="500" r="22" fill="#3D3D3D"/>
+  <circle cx="624" cy="500" r="22" fill="#3D3D3D"/>
+  <!-- Eye highlights -->
+  <circle cx="410" cy="492" r="6" fill="#FFF8F0"/>
+  <circle cx="634" cy="492" r="6" fill="#FFF8F0"/>
+
+  <!-- Nose outline -->
+  <path d="M 512 555 L 498 575 L 526 575 Z" fill="none" stroke="#3D3D3D" stroke-width="8" stroke-linejoin="round"/>
+
+  <!-- Mouth -->
+  <path d="M 498 582 Q 512 600 526 582" fill="none" stroke="#3D3D3D" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Whiskers left -->
+  <line x1="380" y1="560" x2="210" y2="530" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
+  <line x1="380" y1="575" x2="200" y2="575" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
+  <line x1="380" y1="590" x2="210" y2="625" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Whiskers right -->
+  <line x1="644" y1="560" x2="814" y2="530" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
+  <line x1="644" y1="575" x2="824" y2="575" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
+  <line x1="644" y1="590" x2="814" y2="625" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
+</svg>
