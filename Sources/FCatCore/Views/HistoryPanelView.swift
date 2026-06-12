@@ -28,28 +28,36 @@ public struct HistoryPanelView: View {
             // Left-right split
             HSplitView {
                 // Left: item list
-                List(Array(viewModel.visibleItems.enumerated()), id: \.element.id) { index, item in
-                    HStack(spacing: 8) {
-                        Text(icon(for: item))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 16)
-                        Text(item.previewTitle)
-                            .lineLimit(1)
-                            .font(.system(size: 13))
-                        Spacer()
-                        Text(item.isFavorite ? "★" : "☆")
-                            .foregroundStyle(item.isFavorite ? .yellow : .secondary)
-                            .font(.system(size: 14))
-                            .onTapGesture { try? viewModel.toggleFavoriteSelected() }
+                ScrollViewReader { scrollProxy in
+                    List(Array(viewModel.visibleItems.enumerated()), id: \.element.id) { index, item in
+                        HStack(spacing: 8) {
+                            Text(icon(for: item))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 16)
+                            Text(item.previewTitle)
+                                .lineLimit(1)
+                                .font(.system(size: 13))
+                            Spacer()
+                            Text(item.isFavorite ? "★" : "☆")
+                                .foregroundStyle(item.isFavorite ? .yellow : .secondary)
+                                .font(.system(size: 14))
+                                .onTapGesture { try? viewModel.toggleFavoriteSelected() }
+                        }
+                        .padding(.vertical, 3)
+                        .padding(.horizontal, 6)
+                        .background(index == viewModel.selectedIndex ? Color.accentColor.opacity(0.18) : Color.clear)
+                        .contentShape(Rectangle())
+                        .id(index)
+                        .onTapGesture { viewModel.select(index: index) }
                     }
-                    .padding(.vertical, 3)
-                    .padding(.horizontal, 6)
-                    .background(index == viewModel.selectedIndex ? Color.accentColor.opacity(0.18) : Color.clear)
-                    .contentShape(Rectangle())
-                    .onTapGesture { viewModel.select(index: index) }
+                    .frame(minWidth: 220)
+                    .onChange(of: viewModel.selectedIndex) { newIndex in
+                        withAnimation(.easeInOut(duration: 0.12)) {
+                            scrollProxy.scrollTo(newIndex, anchor: .center)
+                        }
+                    }
                 }
-                .frame(minWidth: 220)
 
                 // Right: detail preview
                 if viewModel.visibleItems.indices.contains(viewModel.selectedIndex) {

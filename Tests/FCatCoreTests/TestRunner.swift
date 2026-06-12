@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import FCatCore
 
@@ -26,6 +27,7 @@ struct FCatCoreTestRunner {
         try testNonFavoriteImageBytesAreCapped()
         try testFavoriteImagesAreNotRemovedByImageCaps()
         try testTextChangeCreatesTextItem()
+        try testWhitespaceOnlyTextDoesNotCreateTextItem()
         try testSameChangeCountDoesNotCreateItemTwice()
         try testFilePathsCreateFileItem()
         try testImageDataCreatesImageItemWithAssetPath()
@@ -231,6 +233,14 @@ struct FCatCoreTestRunner {
         try expect(sink.items[0].type == .text, "text monitor type")
         try expect(sink.items[0].previewTitle == "hello world", "text monitor preview")
         try expect(sink.items[0].contentText == "hello world", "text monitor content")
+    }
+
+    static func testWhitespaceOnlyTextDoesNotCreateTextItem() throws {
+        let pasteboard = NSPasteboard.withUniqueName()
+        pasteboard.clearContents()
+        pasteboard.setString(" \n\t", forType: .string)
+        let client = SystemPasteboardClient(pasteboard: pasteboard)
+        try expect(client.readSnapshot() == nil, "whitespace-only clipboard text ignored")
     }
 
     static func testSameChangeCountDoesNotCreateItemTwice() throws {

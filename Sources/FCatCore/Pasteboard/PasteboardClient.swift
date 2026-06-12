@@ -29,7 +29,7 @@ public final class SystemPasteboardClient: PasteboardClient {
         if let image = NSImage(pasteboard: pasteboard), let data = image.pngData() {
             return .imagePNG(data)
         }
-        if let text = pasteboard.string(forType: .string), !text.isEmpty {
+        if let text = pasteboard.string(forType: .string), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .text(text)
         }
         return nil
