@@ -44,6 +44,10 @@ struct FCatCoreTestRunner {
         try testAISettingsWhitespaceOnlyIsIncomplete()
         try testJSONFormatterFormatsValidJSON()
         try testJSONFormatterRejectsInvalidJSON()
+        try awaitTestAIServiceBuildsOpenAICompatibleRequest()
+        try awaitTestAIServiceRejectsMissingConfiguration()
+        try awaitTestAIServiceRejectsLongTextBeforeNetwork()
+        try awaitTestAIServiceParsesSuccessfulResponse()
         print("FCatCoreTests passed")
     }
 
@@ -382,6 +386,71 @@ struct FCatCoreTestRunner {
         }
     }
 
+    static func runAsync(_ operation: @escaping () async throws -> Void) throws {
+        let semaphore = DispatchSemaphore(value: 0)
+        var capturedError: Error?
+        Task {
+            do { try await operation() }
+            catch { capturedError = error }
+            semaphore.signal()
+        }
+        semaphore.wait()
+        if let capturedError { throw capturedError }
+    }
+
+    static func awaitTestAIServiceBuildsOpenAICompatibleRequest() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello world"), settings: settings)
+
+            try expect(client.lastRequest?.url?.absoluteString == "https://api.example.com/v1/chat/completions", "chat completions URL")
+            try expect(client.lastRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer secret", "authorization header")
+            let body = String(data: client.lastBody ?? Data(), encoding: .utf8) ?? ""
+            try expect(body.contains("\"model\":\"model-a\""), "request model")
+            try expect(body.contains("Summarize the following text"), "request prompt")
+        }
+    }
+
+    static func awaitTestAIServiceRejectsMissingConfiguration() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data(), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "", model: "", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "")
+            do {
+                _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+                try expect(false, "missing configuration should throw")
+            } catch AIServiceError.missingConfiguration {
+                try expect(client.lastRequest == nil, "missing configuration avoids network")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceRejectsLongTextBeforeNetwork() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data(), statusCode: 200)
+            let service = AIService(httpClient: client, maxInputCharacters: 5)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            do {
+                _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "123456"), settings: settings)
+                try expect(false, "long text should throw")
+            } catch AIServiceError.inputTooLong {
+                try expect(client.lastRequest == nil, "long input avoids network")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceParsesSuccessfulResponse() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"choices\":[{\"message\":{\"content\":\"summary result\"}}]}".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            let result = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+            try expect(result == "summary result", "AI response content")
+        }
+    }
+
     static func makeStore(directory: URL, imageCountLimit: Int = 100, imageByteLimit: Int64 = 500 * 1024 * 1024) throws -> ClipboardStore {
         try ClipboardStore(databaseURL: directory.appendingPathComponent("history.sqlite"), imageCountLimit: imageCountLimit, imageByteLimit: imageByteLimit)
     }
@@ -392,13 +461,13 @@ struct FCatCoreTestRunner {
         return directory
     }
 
-    static func makeItem(title: String, type: ClipboardContentType = .text, text: String? = nil, favorite: Bool = false, hash: String? = nil, assetPath: String? = nil, lastUsedOffset: TimeInterval = 0) -> ClipboardItem {
+    static func makeItem(title: String, type: ClipboardContentType = .text, text: String? = nil, content: String? = nil, favorite: Bool = false, hash: String? = nil, assetPath: String? = nil, lastUsedOffset: TimeInterval = 0) -> ClipboardItem {
         let baseDate = Date(timeIntervalSince1970: 1_700_000_000)
         return ClipboardItem(
             id: UUID(),
             type: type,
             previewTitle: title,
-            contentText: text ?? title,
+            contentText: content ?? text ?? title,
             assetPath: assetPath,
             sourceAppName: nil,
             createdAt: baseDate.addingTimeInterval(lastUsedOffset),
@@ -448,4 +517,23 @@ final class InMemoryAPIKeyStore: APIKeyStore {
 
     func loadAPIKey() -> String { value }
     func saveAPIKey(_ apiKey: String) throws { value = apiKey }
+}
+
+final class FakeAIHTTPClient: AIHTTPClient {
+    var responseData: Data
+    var statusCode: Int
+    var lastRequest: URLRequest?
+    var lastBody: Data?
+
+    init(responseData: Data, statusCode: Int) {
+        self.responseData = responseData
+        self.statusCode = statusCode
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        lastRequest = request
+        lastBody = request.httpBody
+        let response = HTTPURLResponse(url: request.url!, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
+        return (responseData, response)
+    }
 }
