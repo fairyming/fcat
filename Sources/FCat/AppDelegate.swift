@@ -93,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 catch { self?.showError("Shortcut registration failed. Choose another shortcut.") }
             }
         }
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 220), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 460), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.contentView = NSHostingView(rootView: view)
         window.title = "FCat Settings"
         window.center()

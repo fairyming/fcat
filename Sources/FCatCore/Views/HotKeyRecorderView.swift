@@ -48,9 +48,40 @@ public struct HotKeyRecorderView: View {
                     .foregroundStyle(.green)
                     .font(.caption)
             }
+
+            Divider()
+
+            Text("AI Actions")
+                .font(.title3.bold())
+
+            TextField("API Base URL", text: $viewModel.aiBaseURL)
+                .textFieldStyle(.roundedBorder)
+
+            SecureField("API Key", text: $viewModel.aiAPIKey)
+                .textFieldStyle(.roundedBorder)
+
+            TextField("Model", text: $viewModel.aiModel)
+                .textFieldStyle(.roundedBorder)
+
+            HStack {
+                TextField("Default Language", text: $viewModel.aiDefaultLanguage)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Timeout", value: $viewModel.aiTimeoutSeconds, format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+            }
+
+            HStack {
+                Button("Save AI Settings") { viewModel.saveAISettings() }
+                if let message = viewModel.aiSettingsMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(message.contains("Failed") ? .red : .green)
+                }
+            }
         }
         .padding(24)
-        .frame(width: 460, height: 220)
+        .frame(width: 520, height: 460)
         .onDisappear { stopRecording() }
     }
 
