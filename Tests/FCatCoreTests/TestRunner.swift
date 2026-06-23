@@ -53,6 +53,13 @@ struct FCatCoreTestRunner {
         try awaitTestAIServiceRejectsUnsupportedItemType()
         try awaitTestAIServiceRejectsTextItemWithNilContent()
         try awaitTestAIServiceStripsWhitespaceFromBaseURL()
+        try testHistoryViewModelCopyAIResultWritesTextToPasteboard()
+        try testHistoryViewModelShowsUnsupportedMessageForImageAIAction()
+        try awaitTestHistoryViewModelRunsAIAction()
+        try testHistoryViewModelFormatsJSONLocally()
+        try testHistoryViewModelClearsAIResultWhenSelectionChanges()
+        try testHistoryViewModelClearsAIResultWhenQueryChanges()
+        try testHistoryViewModelClearsAIResultWhenCategoryChanges()
         print("FCatCoreTests passed")
     }
 
@@ -392,14 +399,20 @@ struct FCatCoreTestRunner {
     }
 
     static func runAsync(_ operation: @escaping () async throws -> Void) throws {
-        let semaphore = DispatchSemaphore(value: 0)
+        var isFinished = false
         var capturedError: Error?
         Task {
             do { try await operation() }
             catch { capturedError = error }
-            semaphore.signal()
+            isFinished = true
         }
-        semaphore.wait()
+
+        let deadline = Date(timeIntervalSinceNow: 10)
+        while !isFinished && Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
+        }
+
+        try expect(isFinished, "async test timed out")
         if let capturedError { throw capturedError }
     }
 
@@ -529,6 +542,61 @@ struct FCatCoreTestRunner {
         }
     }
 
+    static func testHistoryViewModelCopyAIResultWritesTextToPasteboard() throws {
+        let pasteboard = WritableFakePasteboard()
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "source")]), pasteboard: pasteboard)
+        viewModel.aiResult = "AI output"
+        try viewModel.copyAIResult()
+        try expect(pasteboard.writtenText == "AI output", "AI result written as text")
+    }
+
+    static func testHistoryViewModelShowsUnsupportedMessageForImageAIAction() throws {
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "image", type: .image)]), pasteboard: WritableFakePasteboard())
+        viewModel.openAIActions()
+        try expect(viewModel.aiError == "AI actions only support text in this version.", "unsupported AI action message")
+    }
+
+    static func awaitTestHistoryViewModelRunsAIAction() throws {
+        try runAsync {
+            let aiService = FakeAIService(result: "summary")
+            let settingsStore = StaticAISettingsStore(settings: AISettings(baseURL: "https://api.example.com/v1", model: "model", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret"))
+            let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "source", content: "Hello")]), pasteboard: WritableFakePasteboard(), aiService: aiService, aiSettingsStore: settingsStore)
+            await viewModel.runSelectedAIAction()
+            try expect(viewModel.aiResult == "summary", "AI result state")
+            try expect(!viewModel.aiLoading, "AI loading cleared")
+        }
+    }
+
+    static func testHistoryViewModelFormatsJSONLocally() throws {
+        let aiService = FakeAIService(result: "should not be used")
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "json", content: "{\"a\":1}")]), pasteboard: WritableFakePasteboard(), aiService: aiService)
+        viewModel.selectedAIActionIndex = 4
+        viewModel.runSelectedAIActionSynchronouslyForLocalActions()
+        try expect(viewModel.aiResult?.contains("\"a\"") == true, "local JSON result")
+        try expect(aiService.calls == 0, "JSON formatter skips AI service")
+    }
+
+    static func testHistoryViewModelClearsAIResultWhenSelectionChanges() throws {
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "one"), makeItem(title: "two")]), pasteboard: WritableFakePasteboard())
+        viewModel.aiResult = "old"
+        viewModel.moveSelection(delta: 1)
+        try expect(viewModel.aiResult == nil, "selection change clears AI result")
+    }
+
+    static func testHistoryViewModelClearsAIResultWhenQueryChanges() throws {
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "one"), makeItem(title: "two")]), pasteboard: WritableFakePasteboard())
+        viewModel.aiResult = "old"
+        viewModel.query = "two"
+        try expect(viewModel.aiResult == nil, "query change clears AI result")
+    }
+
+    static func testHistoryViewModelClearsAIResultWhenCategoryChanges() throws {
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "one"), makeItem(title: "image", type: .image)]), pasteboard: WritableFakePasteboard())
+        viewModel.aiError = "old"
+        viewModel.category = .images
+        try expect(viewModel.aiError == nil, "category change clears AI error")
+    }
+
     static func makeStore(directory: URL, imageCountLimit: Int = 100, imageByteLimit: Int64 = 500 * 1024 * 1024) throws -> ClipboardStore {
         try ClipboardStore(databaseURL: directory.appendingPathComponent("history.sqlite"), imageCountLimit: imageCountLimit, imageByteLimit: imageByteLimit)
     }
@@ -567,13 +635,16 @@ struct FakePasteboard: PasteboardClient {
     func currentChangeCount() -> Int { changeCount }
     func readSnapshot() -> PasteboardSnapshot? { snapshot }
     func write(_ item: ClipboardItem) throws {}
+    func writeText(_ text: String) throws {}
 }
 
 final class WritableFakePasteboard: PasteboardClient {
     var written: [ClipboardItem] = []
+    var writtenText: String?
     func currentChangeCount() -> Int { 0 }
     func readSnapshot() -> PasteboardSnapshot? { nil }
     func write(_ item: ClipboardItem) throws { written.append(item) }
+    func writeText(_ text: String) throws { writtenText = text }
 }
 
 enum TestFailure: Error, CustomStringConvertible {
@@ -614,4 +685,22 @@ final class FakeAIHTTPClient: AIHTTPClient {
         let response = HTTPURLResponse(url: request.url!, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
         return (responseData, response)
     }
+}
+
+final class FakeAIService: AIServiceProtocol {
+    var result: String
+    var calls = 0
+
+    init(result: String) { self.result = result }
+
+    func run(action: AIAction, item: ClipboardItem, settings: AISettings) async throws -> String {
+        calls += 1
+        return result
+    }
+}
+
+final class StaticAISettingsStore: AISettingsProviding {
+    let settings: AISettings
+    init(settings: AISettings) { self.settings = settings }
+    func loadSettings() -> AISettings { settings }
 }

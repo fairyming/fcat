@@ -6,7 +6,11 @@ public protocol APIKeyStore {
     func saveAPIKey(_ apiKey: String) throws
 }
 
-public final class AISettingsStore {
+public protocol AISettingsProviding {
+    func loadSettings() -> AISettings
+}
+
+public final class AISettingsStore: AISettingsProviding {
     private let defaults: UserDefaults
     private let keychain: APIKeyStore
     private let baseURLKey = "FCat.ai.baseURL"

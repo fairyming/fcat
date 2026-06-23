@@ -11,6 +11,7 @@ public protocol PasteboardClient {
     func currentChangeCount() -> Int
     func readSnapshot() -> PasteboardSnapshot?
     func write(_ item: ClipboardItem) throws
+    func writeText(_ text: String) throws
 }
 
 public final class SystemPasteboardClient: PasteboardClient {
@@ -45,6 +46,11 @@ public final class SystemPasteboardClient: PasteboardClient {
                 pasteboard.writeObjects([image])
             }
         }
+    }
+
+    public func writeText(_ text: String) throws {
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 }
 
