@@ -35,6 +35,9 @@ struct FCatCoreTestRunner {
         try testHistoryViewModelCategoryFiltersItems()
         try testHistoryViewModelMoveSelectionClampsToVisibleItems()
         try testHistoryViewModelCopySelectedWritesToPasteboard()
+        try testAIActionsContainExpectedBuiltIns()
+        try testAIActionSupportsOnlyTextItems()
+        try testAIActionPromptUsesInputAndDefaultLanguage()
         print("FCatCoreTests passed")
     }
 
@@ -298,6 +301,25 @@ struct FCatCoreTestRunner {
         let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "one")]), pasteboard: pasteboard)
         try viewModel.copySelected()
         try expect(pasteboard.written.first?.previewTitle == "one", "copy selected writes pasteboard")
+    }
+
+    static func testAIActionsContainExpectedBuiltIns() throws {
+        let actions = AIAction.builtIn
+        try expect(actions.map(\.id) == ["translate-zh", "summarize", "rewrite", "explain-code", "format-json"], "built-in AI action ids")
+        try expect(actions.map(\.title) == ["Translate to Chinese", "Summarize", "Rewrite", "Explain Code", "Format JSON"], "built-in AI action titles")
+    }
+
+    static func testAIActionSupportsOnlyTextItems() throws {
+        let text = makeItem(title: "text", type: .text)
+        let image = makeItem(title: "image", type: .image)
+        try expect(AIAction.summarize.supports(text), "AI action supports text")
+        try expect(!AIAction.summarize.supports(image), "AI action rejects image")
+    }
+
+    static func testAIActionPromptUsesInputAndDefaultLanguage() throws {
+        let prompt = AIAction.translateToChinese.prompt(for: "Hello", defaultLanguage: "中文")
+        try expect(prompt.contains("Translate the following text to 中文"), "translate prompt language")
+        try expect(prompt.contains("Hello"), "translate prompt input")
     }
 
     static func makeStore(directory: URL, imageCountLimit: Int = 100, imageByteLimit: Int64 = 500 * 1024 * 1024) throws -> ClipboardStore {
