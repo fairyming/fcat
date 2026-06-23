@@ -38,6 +38,10 @@ struct FCatCoreTestRunner {
         try testAIActionsContainExpectedBuiltIns()
         try testAIActionSupportsOnlyTextItems()
         try testAIActionPromptUsesInputAndDefaultLanguage()
+        try testAISettingsValidationRequiresBaseURLModelAndAPIKey()
+        try testAISettingsStorePersistsNonSecretSettings()
+        try testAISettingsStoreSaveAPIKeyRoundTrip()
+        try testAISettingsWhitespaceOnlyIsIncomplete()
         print("FCatCoreTests passed")
     }
 
@@ -322,6 +326,45 @@ struct FCatCoreTestRunner {
         try expect(prompt.contains("Hello"), "translate prompt input")
     }
 
+    static func testAISettingsValidationRequiresBaseURLModelAndAPIKey() throws {
+        let complete = AISettings(baseURL: "https://api.example.com/v1", model: "test-model", defaultLanguage: "中文", timeoutSeconds: 30, apiKey: "secret")
+        try expect(complete.isComplete, "complete AI settings")
+
+        let missingKey = AISettings(baseURL: "https://api.example.com/v1", model: "test-model", defaultLanguage: "中文", timeoutSeconds: 30, apiKey: "")
+        try expect(!missingKey.isComplete, "missing API key")
+    }
+
+    static func testAISettingsStorePersistsNonSecretSettings() throws {
+        let defaults = UserDefaults(suiteName: "FCatTests.AISettings")!
+        defaults.removePersistentDomain(forName: "FCatTests.AISettings")
+
+        let store = AISettingsStore(defaults: defaults, keychain: InMemoryAPIKeyStore())
+        store.save(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 12)
+
+        let loaded = store.loadSettings()
+        try expect(loaded.baseURL == "https://api.example.com/v1", "stored AI base URL")
+        try expect(loaded.model == "model-a", "stored AI model")
+        try expect(loaded.defaultLanguage == "中文", "stored AI language")
+        try expect(loaded.timeoutSeconds == 12, "stored AI timeout")
+    }
+
+    static func testAISettingsStoreSaveAPIKeyRoundTrip() throws {
+        let defaults = UserDefaults(suiteName: "FCatTests.AISettings.APIKey")!
+        defaults.removePersistentDomain(forName: "FCatTests.AISettings.APIKey")
+
+        let keychain = InMemoryAPIKeyStore()
+        let store = AISettingsStore(defaults: defaults, keychain: keychain)
+        try store.saveAPIKey("secret")
+
+        let loaded = store.loadSettings()
+        try expect(loaded.apiKey == "secret", "saveAPIKey round trip")
+    }
+
+    static func testAISettingsWhitespaceOnlyIsIncomplete() throws {
+        let whitespaceSettings = AISettings(baseURL: "  ", model: "  ", defaultLanguage: "中文", timeoutSeconds: 30, apiKey: "  ")
+        try expect(!whitespaceSettings.isComplete, "whitespace-only AI settings are incomplete")
+    }
+
     static func makeStore(directory: URL, imageCountLimit: Int = 100, imageByteLimit: Int64 = 500 * 1024 * 1024) throws -> ClipboardStore {
         try ClipboardStore(databaseURL: directory.appendingPathComponent("history.sqlite"), imageCountLimit: imageCountLimit, imageByteLimit: imageByteLimit)
     }
@@ -381,4 +424,11 @@ enum TestFailure: Error, CustomStringConvertible {
 
 func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     if !condition() { throw TestFailure.failed(message) }
+}
+
+final class InMemoryAPIKeyStore: APIKeyStore {
+    var value = ""
+
+    func loadAPIKey() -> String { value }
+    func saveAPIKey(_ apiKey: String) throws { value = apiKey }
 }
