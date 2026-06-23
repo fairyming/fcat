@@ -51,10 +51,11 @@ public final class AIService: AIServiceProtocol {
 
     public func run(action: AIAction, item: ClipboardItem, settings: AISettings) async throws -> String {
         guard settings.isComplete else { throw AIServiceError.missingConfiguration }
-        guard action.supports(item), let input = item.contentText else { throw AIServiceError.unsupportedItem }
+        guard action.supports(item) else { throw AIServiceError.unsupportedItem }
+        guard let input = item.contentText else { throw AIServiceError.invalidResponse }
         guard input.count <= maxInputCharacters else { throw AIServiceError.inputTooLong }
 
-        let trimmedBase = settings.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let trimmedBase = settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "/")))
         guard let url = URL(string: trimmedBase + "/chat/completions") else { throw AIServiceError.invalidBaseURL }
 
         var request = URLRequest(url: url, timeoutInterval: settings.timeoutSeconds)
@@ -68,7 +69,12 @@ public final class AIService: AIServiceProtocol {
 
         let (data, response) = try await httpClient.data(for: request)
         guard (200..<300).contains(response.statusCode) else { throw AIServiceError.httpStatus(response.statusCode) }
-        let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
+        let decoded: ChatResponse
+        do {
+            decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
+        } catch {
+            throw AIServiceError.invalidResponse
+        }
         guard let content = decoded.choices.first?.message.content, !content.isEmpty else {
             throw AIServiceError.invalidResponse
         }

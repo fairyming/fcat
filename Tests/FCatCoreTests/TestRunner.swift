@@ -48,6 +48,11 @@ struct FCatCoreTestRunner {
         try awaitTestAIServiceRejectsMissingConfiguration()
         try awaitTestAIServiceRejectsLongTextBeforeNetwork()
         try awaitTestAIServiceParsesSuccessfulResponse()
+        try awaitTestAIServiceRejectsNon2xxStatus()
+        try awaitTestAIServiceRejectsInvalidResponseJSON()
+        try awaitTestAIServiceRejectsUnsupportedItemType()
+        try awaitTestAIServiceRejectsTextItemWithNilContent()
+        try awaitTestAIServiceStripsWhitespaceFromBaseURL()
         print("FCatCoreTests passed")
     }
 
@@ -448,6 +453,79 @@ struct FCatCoreTestRunner {
             let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
             let result = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
             try expect(result == "summary result", "AI response content")
+        }
+    }
+
+    static func awaitTestAIServiceRejectsNon2xxStatus() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"error\":\"unauthorized\"}".utf8), statusCode: 401)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "bad-key")
+            do {
+                _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+                try expect(false, "non-2xx should throw")
+            } catch AIServiceError.httpStatus(let status) {
+                try expect(status == 401, "httpStatus is 401")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceRejectsInvalidResponseJSON() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("not valid json".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            do {
+                _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+                try expect(false, "invalid JSON should throw")
+            } catch AIServiceError.invalidResponse {
+                try expect(true, "invalidResponse thrown for unparseable JSON")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceRejectsUnsupportedItemType() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data(), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            let imageItem = makeItem(title: "image", type: .image, content: nil)
+            do {
+                _ = try await service.run(action: .summarize, item: imageItem, settings: settings)
+                try expect(false, "unsupported item type should throw")
+            } catch AIServiceError.unsupportedItem {
+                try expect(client.lastRequest == nil, "unsupported item avoids network")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceRejectsTextItemWithNilContent() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data(), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            let baseDate = Date(timeIntervalSince1970: 1_700_000_000)
+            let textNoContent = ClipboardItem(
+                id: UUID(), type: .text, previewTitle: "empty text", contentText: nil, assetPath: nil,
+                sourceAppName: nil, createdAt: baseDate, lastUsedAt: baseDate, isFavorite: false,
+                contentHash: "hash-nil-content"
+            )
+            do {
+                _ = try await service.run(action: .summarize, item: textNoContent, settings: settings)
+                try expect(false, "text item with nil content should throw")
+            } catch AIServiceError.invalidResponse {
+                try expect(client.lastRequest == nil, "nil content text avoids network")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceStripsWhitespaceFromBaseURL() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "  https://api.example.com/v1/  \n", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+            try expect(client.lastRequest?.url?.absoluteString == "https://api.example.com/v1/chat/completions", "whitespace and trailing slash stripped from base URL")
         }
     }
 
