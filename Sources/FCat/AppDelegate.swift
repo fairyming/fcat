@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: ClipboardStore?
     private var pasteboard: SystemPasteboardClient?
     private var settingsViewModel = SettingsViewModel()
+    private let aiSettingsStore = AISettingsStore()
+    private let aiService = AIService()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if !DEBUG
@@ -70,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let viewModel = HistoryPanelViewModel(store: store, pasteboard: pasteboard)
+        let viewModel = HistoryPanelViewModel(store: store, pasteboard: pasteboard, aiService: aiService, aiSettingsStore: aiSettingsStore)
         let view = HistoryPanelView(viewModel: viewModel) { [weak self] in self?.historyWindow?.orderOut(nil) }
         let window = BorderlessWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 520), styleMask: .borderless, backing: .buffered, defer: false)
         window.contentView = NSHostingView(rootView: view)
