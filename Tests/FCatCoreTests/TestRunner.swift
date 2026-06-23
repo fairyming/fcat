@@ -42,6 +42,8 @@ struct FCatCoreTestRunner {
         try testAISettingsStorePersistsNonSecretSettings()
         try testAISettingsStoreSaveAPIKeyRoundTrip()
         try testAISettingsWhitespaceOnlyIsIncomplete()
+        try testJSONFormatterFormatsValidJSON()
+        try testJSONFormatterRejectsInvalidJSON()
         print("FCatCoreTests passed")
     }
 
@@ -363,6 +365,21 @@ struct FCatCoreTestRunner {
     static func testAISettingsWhitespaceOnlyIsIncomplete() throws {
         let whitespaceSettings = AISettings(baseURL: "  ", model: "  ", defaultLanguage: "中文", timeoutSeconds: 30, apiKey: "  ")
         try expect(!whitespaceSettings.isComplete, "whitespace-only AI settings are incomplete")
+    }
+
+    static func testJSONFormatterFormatsValidJSON() throws {
+        let formatted = try JSONFormatter.format("{\"b\":2,\"a\":1}")
+        try expect(formatted.contains("\n"), "formatted JSON has line breaks")
+        try expect(formatted.contains("\"a\""), "formatted JSON contains key")
+    }
+
+    static func testJSONFormatterRejectsInvalidJSON() throws {
+        do {
+            _ = try JSONFormatter.format("not json")
+            try expect(false, "invalid JSON should throw")
+        } catch {
+            try expect(true, "invalid JSON throws")
+        }
     }
 
     static func makeStore(directory: URL, imageCountLimit: Int = 100, imageByteLimit: Int64 = 500 * 1024 * 1024) throws -> ClipboardStore {
