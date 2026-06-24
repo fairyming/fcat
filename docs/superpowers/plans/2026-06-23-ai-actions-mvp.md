@@ -10,13 +10,15 @@
 
 ---
 
-## Current Status (2026-06-23)
+## Current Status (2026-06-24)
 
-- Completed and merged: Tasks 1-6.
-- Latest merged implementation commit: `4ae71fa feat: add AI actions view model state`.
-- Task 5/6 verification: `swift run --package-path /Users/chenzhiming/work/chaitin/tool/fcat/.claude/worktrees/ai-actions-mvp FCatCoreTests` passed.
-- Paused before: Task 7 (`Add AI settings UI`).
-- Remaining: Task 7 settings UI, Task 8 history AI UI, Task 9 final verification/manual smoke test.
+- All tasks (1-8) completed and merged.
+- Latest commit: `660fb03 fix: address quality review issues for AI actions UI`.
+- Task 9 verification:
+  - `swift run FCatCoreTests` — passed
+  - `swift build` — passed
+  - `swift build -c release` — passed
+- Remaining: Manual smoke test only (run `swift run FCat` and verify settings/history/AI actions work).
 
 ---
 
