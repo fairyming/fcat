@@ -23,6 +23,10 @@ private final class HotKeyRecorderMonitor: ObservableObject {
                 return nil
             }
 
+            // At least one modifier key required (Cmd, Option, Control, or Shift)
+            let requiredModifiers: UInt32 = UInt32(cmdKey | optionKey | controlKey | shiftKey)
+            if modifiers & requiredModifiers == 0 { return event }
+
             let hotKey = HotKey(keyCode: keyCode, modifiers: modifiers)
             viewModel.save(hotKey: hotKey)
             saveHotKey(hotKey)
