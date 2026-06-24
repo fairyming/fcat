@@ -138,7 +138,7 @@ public final class HistoryPanelViewModel: ObservableObject {
         try pasteboard.writeText(aiResult)
     }
 
-    private func clearAIOutput() {
+    public func clearAIOutput() {
         aiResult = nil
         aiError = nil
         aiLoading = false
