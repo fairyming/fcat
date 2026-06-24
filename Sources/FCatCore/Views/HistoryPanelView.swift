@@ -193,13 +193,13 @@ public struct HistoryPanelView: View {
                 return nil
             }
 
-            // Cmd+Arrow keys navigate AI action selection when AI panel is open
-            if viewModel.aiActionsVisible && keyCode == kVK_UpArrow && modifiers.contains(.command) {
+            // Arrow keys navigate AI action selection when AI panel is open
+            if viewModel.aiActionsVisible && keyCode == kVK_UpArrow {
                 viewModel.moveAIActionSelection(delta: -1)
                 return nil
             }
 
-            if viewModel.aiActionsVisible && keyCode == kVK_DownArrow && modifiers.contains(.command) {
+            if viewModel.aiActionsVisible && keyCode == kVK_DownArrow {
                 viewModel.moveAIActionSelection(delta: 1)
                 return nil
             }
