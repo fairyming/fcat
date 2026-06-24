@@ -101,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openHistory() {
-        DispatchQueue.main.async { self.doOpenHistory() }
+        DispatchQueue.main.async { [weak self] in self?.doOpenHistory() }
     }
 
     private func doOpenHistory() {
@@ -126,7 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() {
-        DispatchQueue.main.async { self.doOpenSettings() }
+        DispatchQueue.main.async { [weak self] in self?.doOpenSettings() }
     }
 
     private func doOpenSettings() {
