@@ -1,8 +1,20 @@
-import Carbon
 import SwiftUI
+
+public enum SettingsTab: String, CaseIterable, Identifiable {
+    case shortcut
+    case ai
+    public var id: String { rawValue }
+    public var displayName: String {
+        switch self {
+        case .shortcut: return "Shortcut"
+        case .ai: return "AI Actions"
+        }
+    }
+}
 
 public struct SettingsView: View {
     @ObservedObject private var viewModel: SettingsViewModel
+    @State private var selectedTab: SettingsTab = .shortcut
     private let saveHotKey: (HotKey) -> Void
 
     public init(viewModel: SettingsViewModel, saveHotKey: @escaping (HotKey) -> Void) {
@@ -11,25 +23,26 @@ public struct SettingsView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Set a global shortcut")
-                .font(.title2.bold())
-            Text("Choose the shortcut used to show and hide clipboard history.")
-                .foregroundStyle(.secondary)
-
-            Button("Use Command + Option + Space") {
-                let hotKey = HotKey(keyCode: 49, modifiers: UInt32(cmdKey | optionKey))
-                viewModel.save(hotKey: hotKey)
-                saveHotKey(hotKey)
+        VStack(spacing: 0) {
+            Picker("", selection: $selectedTab) {
+                ForEach(SettingsTab.allCases) { tab in
+                    Text(tab.displayName).tag(tab)
+                }
             }
-            .keyboardShortcut(.space, modifiers: [.command, .option])
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
 
-            if viewModel.hasHotKey {
-                Text("Shortcut saved")
-                    .foregroundStyle(.green)
+            Divider()
+
+            switch selectedTab {
+            case .shortcut:
+                ShortcutSettingsView(viewModel: viewModel, saveHotKey: saveHotKey)
+            case .ai:
+                AISettingsView(viewModel: viewModel)
             }
         }
-        .padding(24)
-        .frame(width: 420, height: 220)
+        .frame(width: 520, height: 460)
     }
 }
