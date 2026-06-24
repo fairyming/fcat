@@ -1,7 +1,10 @@
 import AppKit
 
+final class AppDelegateHolder {
+    static let delegate = AppDelegate()
+}
+
 let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
+app.delegate = AppDelegateHolder.delegate
 app.setActivationPolicy(.accessory)
 app.run()
