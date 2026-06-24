@@ -13,8 +13,7 @@ let package = Package(
         .target(
             name: "FCatCore",
             linkerSettings: [
-                .linkedLibrary("sqlite3"),
-                .linkedFramework("Security")
+                .linkedLibrary("sqlite3")
             ]
         ),
         .executableTarget(

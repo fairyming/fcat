@@ -356,7 +356,7 @@ struct FCatCoreTestRunner {
         let defaults = UserDefaults(suiteName: "FCatTests.AISettings")!
         defaults.removePersistentDomain(forName: "FCatTests.AISettings")
 
-        let store = AISettingsStore(defaults: defaults, keychain: InMemoryAPIKeyStore())
+        let store = AISettingsStore(defaults: defaults)
         store.save(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 12)
 
         let loaded = store.loadSettings()
@@ -370,9 +370,8 @@ struct FCatCoreTestRunner {
         let defaults = UserDefaults(suiteName: "FCatTests.AISettings.APIKey")!
         defaults.removePersistentDomain(forName: "FCatTests.AISettings.APIKey")
 
-        let keychain = InMemoryAPIKeyStore()
-        let store = AISettingsStore(defaults: defaults, keychain: keychain)
-        try store.saveAPIKey("secret")
+        let store = AISettingsStore(defaults: defaults)
+        store.saveAPIKey("secret")
 
         let loaded = store.loadSettings()
         try expect(loaded.apiKey == "secret", "saveAPIKey round trip")
@@ -659,13 +658,6 @@ enum TestFailure: Error, CustomStringConvertible {
 
 func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     if !condition() { throw TestFailure.failed(message) }
-}
-
-final class InMemoryAPIKeyStore: APIKeyStore {
-    var value = ""
-
-    func loadAPIKey() -> String { value }
-    func saveAPIKey(_ apiKey: String) throws { value = apiKey }
 }
 
 final class FakeAIHTTPClient: AIHTTPClient {
