@@ -10,6 +10,18 @@ public struct HotKey: Codable, Equatable {
         self.modifiers = modifiers
     }
 
+    /// Convert NSEvent modifier flags (NX layout) to Carbon modifier flags.
+    /// NSEvent uses: Cmd=0x1000, Ctrl=0x0400, Option=0x0800, Shift=0x0200
+    /// Carbon uses:  Cmd=0x0100, Ctrl=0x1000, Option=0x0800, Shift=0x0200
+    public static func carbonModifiers(from nsModifiers: UInt32) -> UInt32 {
+        var carbon: UInt32 = 0
+        if nsModifiers & 0x1000 != 0 { carbon |= UInt32(cmdKey) }      // NX_CMD → cmdKey
+        if nsModifiers & 0x0400 != 0 { carbon |= UInt32(controlKey) }  // NX_CTRL → controlKey
+        if nsModifiers & 0x0800 != 0 { carbon |= UInt32(optionKey) }   // NX_ALT → optionKey
+        if nsModifiers & 0x0200 != 0 { carbon |= UInt32(shiftKey) }    // NX_SHIFT → shiftKey
+        return carbon
+    }
+
     public var displayString: String {
         var parts: [String] = []
         if modifiers & UInt32(cmdKey) != 0 { parts.append("⌘") }

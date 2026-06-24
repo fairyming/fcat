@@ -14,7 +14,7 @@ private final class HotKeyRecorderMonitor: ObservableObject {
         isRecording = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.isRecording else { return event }
-            let modifiers = UInt32(event.modifierFlags.rawValue)
+            let nsModifiers = UInt32(event.modifierFlags.rawValue)
             let keyCode = UInt32(event.keyCode)
 
             // Escape cancels recording
@@ -23,7 +23,8 @@ private final class HotKeyRecorderMonitor: ObservableObject {
                 return nil
             }
 
-            // At least one modifier key required (Cmd, Option, Control, or Shift)
+            // Convert NSEvent modifiers to Carbon layout and check at least one modifier
+            let modifiers = HotKey.carbonModifiers(from: nsModifiers)
             let requiredModifiers: UInt32 = UInt32(cmdKey | optionKey | controlKey | shiftKey)
             if modifiers & requiredModifiers == 0 { return event }
 
