@@ -17,9 +17,15 @@ private final class HotKeyRecorderMonitor: ObservableObject {
             let modifiers = UInt32(event.modifierFlags.rawValue)
             let keyCode = UInt32(event.keyCode)
 
-            // Allow standard editing shortcuts (Cmd+C, Cmd+V, Cmd+A, Cmd+Z, Cmd+X)
+            // Escape cancels recording
+            if keyCode == UInt32(kVK_Escape) {
+                self.stop()
+                return nil
+            }
+
+            // Allow standard editing shortcuts (Cmd+C/V/A/Z/X, even with extra modifier flags)
             let editingKeyCodes: [UInt32] = [8, 9, 0, 6, 7] // C, V, A, Z, X
-            if modifiers == UInt32(cmdKey) && editingKeyCodes.contains(keyCode) { return event }
+            if (modifiers & UInt32(cmdKey)) != 0 && editingKeyCodes.contains(keyCode) { return event }
 
             // Require at least one modifier (Cmd, Option, Control, or Shift)
             let requiredModifiers: UInt32 = UInt32(cmdKey | optionKey | controlKey | shiftKey)
