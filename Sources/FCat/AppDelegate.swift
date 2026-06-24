@@ -9,7 +9,9 @@ final class BorderlessWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override func resignKey() {
         super.resignKey()
-        if isVisible { orderOut(nil) }
+        if isVisible {
+            DispatchQueue.main.async { self.orderOut(nil) }
+        }
     }
 }
 
