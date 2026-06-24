@@ -39,7 +39,11 @@ struct FCatCoreTestRunner {
         try testAIActionSupportsOnlyTextItems()
         try testAIActionPromptUsesInputAndDefaultLanguage()
         try testAISettingsValidationRequiresBaseURLModelAndAPIKey()
+        try testAISettingsDefaultProviderIsOpenAICompatible()
+        try testAISettingsAnthropicDefaultBaseURL()
+        try testAISettingsMaxTokensValidation()
         try testAISettingsStorePersistsNonSecretSettings()
+        try testAISettingsStoreProviderRoundTrip()
         try testAISettingsStoreSaveAPIKeyRoundTrip()
         try testAISettingsWhitespaceOnlyIsIncomplete()
         try testJSONFormatterFormatsValidJSON()
@@ -53,6 +57,10 @@ struct FCatCoreTestRunner {
         try awaitTestAIServiceRejectsUnsupportedItemType()
         try awaitTestAIServiceRejectsTextItemWithNilContent()
         try awaitTestAIServiceStripsWhitespaceFromBaseURL()
+        try awaitTestAIServiceAnthropicRequest()
+        try awaitTestAIServiceAnthropicResponseParsing()
+        try awaitTestAIServiceAnthropicDefaultBaseURL()
+        try awaitTestAIServiceAnthropicInvalidResponse()
         try testHistoryViewModelCopyAIResultWritesTextToPasteboard()
         try testHistoryViewModelShowsUnsupportedMessageForImageAIAction()
         try awaitTestHistoryViewModelRunsAIAction()
@@ -345,11 +353,31 @@ struct FCatCoreTestRunner {
     }
 
     static func testAISettingsValidationRequiresBaseURLModelAndAPIKey() throws {
-        let complete = AISettings(baseURL: "https://api.example.com/v1", model: "test-model", defaultLanguage: "中文", timeoutSeconds: 30, apiKey: "secret")
+        let complete = AISettings(baseURL: "https://api.example.com/v1", model: "test-model", defaultLanguage: "中文", timeoutSeconds: 30, maxTokens: 1024, apiKey: "secret")
         try expect(complete.isComplete, "complete AI settings")
 
         let missingKey = AISettings(baseURL: "https://api.example.com/v1", model: "test-model", defaultLanguage: "中文", timeoutSeconds: 30, apiKey: "")
         try expect(!missingKey.isComplete, "missing API key")
+
+        let zeroTokens = AISettings(baseURL: "https://api.example.com/v1", model: "test-model", defaultLanguage: "中文", timeoutSeconds: 30, maxTokens: 0, apiKey: "secret")
+        try expect(!zeroTokens.isComplete, "zero max tokens incomplete")
+    }
+
+    static func testAISettingsDefaultProviderIsOpenAICompatible() throws {
+        let settings = AISettings()
+        try expect(settings.provider == .openAICompatible, "default provider is openai-compatible")
+    }
+
+    static func testAISettingsAnthropicDefaultBaseURL() throws {
+        let settings = AISettings(provider: .anthropic, baseURL: "", model: "claude-3", apiKey: "key")
+        try expect(settings.effectiveBaseURL == "https://api.anthropic.com/v1", "anthropic default base URL")
+    }
+
+    static func testAISettingsMaxTokensValidation() throws {
+        let valid = AISettings(baseURL: "https://api.example.com/v1", model: "model", maxTokens: 2048, apiKey: "key")
+        try expect(valid.isComplete, "max tokens > 0 passes")
+        let invalid = AISettings(baseURL: "https://api.example.com/v1", model: "model", maxTokens: 0, apiKey: "key")
+        try expect(!invalid.isComplete, "max tokens 0 fails")
     }
 
     static func testAISettingsStorePersistsNonSecretSettings() throws {
@@ -357,13 +385,26 @@ struct FCatCoreTestRunner {
         defaults.removePersistentDomain(forName: "FCatTests.AISettings")
 
         let store = AISettingsStore(defaults: defaults)
-        store.save(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 12)
+        store.save(provider: .anthropic, baseURL: "https://api.anthropic.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 12, maxTokens: 2048)
 
         let loaded = store.loadSettings()
-        try expect(loaded.baseURL == "https://api.example.com/v1", "stored AI base URL")
+        try expect(loaded.provider == .anthropic, "stored AI provider")
+        try expect(loaded.baseURL == "https://api.anthropic.com/v1", "stored AI base URL")
         try expect(loaded.model == "model-a", "stored AI model")
         try expect(loaded.defaultLanguage == "中文", "stored AI language")
         try expect(loaded.timeoutSeconds == 12, "stored AI timeout")
+        try expect(loaded.maxTokens == 2048, "stored AI max tokens")
+    }
+
+    static func testAISettingsStoreProviderRoundTrip() throws {
+        let defaults = UserDefaults(suiteName: "FCatTests.AISettings.Provider")!
+        defaults.removePersistentDomain(forName: "FCatTests.AISettings.Provider")
+
+        let store = AISettingsStore(defaults: defaults)
+        store.save(provider: .openAICompatible, baseURL: "https://api.example.com/v1", model: "m", defaultLanguage: "en", timeoutSeconds: 30, maxTokens: 512)
+
+        let loaded = store.loadSettings()
+        try expect(loaded.provider == .openAICompatible, "openai provider round trip")
     }
 
     static func testAISettingsStoreSaveAPIKeyRoundTrip() throws {
@@ -476,8 +517,9 @@ struct FCatCoreTestRunner {
             do {
                 _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
                 try expect(false, "non-2xx should throw")
-            } catch AIServiceError.httpStatus(let status) {
+            } catch AIServiceError.httpStatus(let status, let url) {
                 try expect(status == 401, "httpStatus is 401")
+                try expect(url == "https://api.example.com/v1/chat/completions", "httpStatus includes URL")
             }
         }
     }
@@ -538,6 +580,57 @@ struct FCatCoreTestRunner {
             let settings = AISettings(baseURL: "  https://api.example.com/v1/  \n", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
             _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
             try expect(client.lastRequest?.url?.absoluteString == "https://api.example.com/v1/chat/completions", "whitespace and trailing slash stripped from base URL")
+        }
+    }
+
+    static func awaitTestAIServiceAnthropicRequest() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(provider: .anthropic, baseURL: "https://api.anthropic.com/v1", model: "claude-3-haiku-20240307", defaultLanguage: "中文", timeoutSeconds: 10, maxTokens: 1024, apiKey: "secret")
+            _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+
+            try expect(client.lastRequest?.url?.absoluteString == "https://api.anthropic.com/v1/messages", "anthropic messages URL")
+            try expect(client.lastRequest?.value(forHTTPHeaderField: "x-api-key") == "secret", "anthropic x-api-key header")
+            try expect(client.lastRequest?.value(forHTTPHeaderField: "anthropic-version") == "2023-06-01", "anthropic version header")
+            try expect(client.lastRequest?.value(forHTTPHeaderField: "Authorization") == nil, "anthropic no bearer header")
+            let body = String(data: client.lastBody ?? Data(), encoding: .utf8) ?? ""
+            try expect(body.contains("\"max_tokens\":1024"), "anthropic max_tokens field")
+            try expect(body.contains("\"model\":\"claude-3-haiku-20240307\""), "anthropic model field")
+        }
+    }
+
+    static func awaitTestAIServiceAnthropicResponseParsing() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"content\":[{\"type\":\"text\",\"text\":\"summary result\"}]}".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(provider: .anthropic, baseURL: "https://api.anthropic.com/v1", model: "claude-3", maxTokens: 512, apiKey: "key")
+            let result = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+            try expect(result == "summary result", "anthropic response content")
+        }
+    }
+
+    static func awaitTestAIServiceAnthropicDefaultBaseURL() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(provider: .anthropic, baseURL: "", model: "claude-3", maxTokens: 512, apiKey: "key")
+            _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+            try expect(client.lastRequest?.url?.absoluteString == "https://api.anthropic.com/v1/messages", "anthropic default base URL used")
+        }
+    }
+
+    static func awaitTestAIServiceAnthropicInvalidResponse() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("not valid json".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(provider: .anthropic, baseURL: "https://api.anthropic.com/v1", model: "claude-3", maxTokens: 512, apiKey: "key")
+            do {
+                _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+                try expect(false, "invalid Anthropic response should throw")
+            } catch AIServiceError.invalidResponse {
+                try expect(true, "invalidResponse thrown for Anthropic")
+            }
         }
     }
 
