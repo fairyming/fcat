@@ -212,19 +212,13 @@ public struct HistoryPanelView: View {
                 return nil
             }
 
-            // Enter runs selected AI action when AI panel is open
-            if viewModel.aiActionsVisible && keyCode == kVK_Return {
-                Task { await viewModel.runSelectedAIAction() }
-                return nil
-            }
-
             // Cmd+C copies AI result
             if viewModel.aiResult != nil && keyCode == kVK_ANSI_C && modifiers.contains(.command) {
                 try? viewModel.copyAIResult()
                 return nil
             }
 
-            // Enter: AI result takes priority over normal copy/paste
+            // Enter: AI result takes priority over running AI action
             if keyCode == kVK_Return && modifiers.isDisjoint(with: [.command, .option, .control, .shift]) {
                 if viewModel.aiResult != nil {
                     try? viewModel.copyAIResult()
@@ -237,6 +231,14 @@ public struct HistoryPanelView: View {
                     #endif
                     return nil
                 }
+
+                // Enter runs selected AI action when AI panel is open
+                if viewModel.aiActionsVisible {
+                    Task { await viewModel.runSelectedAIAction() }
+                    return nil
+                }
+
+                // Normal copy/paste selected clipboard item
                 #if DEBUG
                 try? viewModel.copySelected()
                 close()
