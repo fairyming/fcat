@@ -58,11 +58,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.title = "F"
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Open History", action: #selector(openHistory), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Clear Non-Favorites", action: #selector(clearNonFavorites), keyEquivalent: ""))
+        let openHistoryItem = NSMenuItem(title: "Open History", action: #selector(openHistory), keyEquivalent: "")
+        openHistoryItem.target = self
+        let settingsItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: "")
+        settingsItem.target = self
+        let clearItem = NSMenuItem(title: "Clear Non-Favorites", action: #selector(clearNonFavorites), keyEquivalent: "")
+        clearItem.target = self
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+
+        menu.addItem(openHistoryItem)
+        menu.addItem(settingsItem)
+        menu.addItem(clearItem)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(quitItem)
         item.menu = menu
         statusItem = item
     }
