@@ -8,13 +8,23 @@ private final class HotKeyRecorderMonitor: ObservableObject {
     private var viewModel: SettingsViewModel?
     private var saveHotKey: ((HotKey) -> Void)?
 
+    /// Convert NSEvent modifier flags to Carbon modifier flags for RegisterEventHotKey.
+    private static func carbonModifiers(from nsFlags: NSEvent.ModifierFlags) -> UInt32 {
+        var carbon: UInt32 = 0
+        if nsFlags.contains(.command) { carbon |= UInt32(cmdKey) }
+        if nsFlags.contains(.control) { carbon |= UInt32(controlKey) }
+        if nsFlags.contains(.option) { carbon |= UInt32(optionKey) }
+        if nsFlags.contains(.shift) { carbon |= UInt32(shiftKey) }
+        return carbon
+    }
+
     func start(viewModel: SettingsViewModel, saveHotKey: @escaping (HotKey) -> Void) {
         self.viewModel = viewModel
         self.saveHotKey = saveHotKey
         isRecording = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.isRecording else { return event }
-            let nsModifiers = UInt32(event.modifierFlags.rawValue)
+            let nsFlags = event.modifierFlags
             let keyCode = UInt32(event.keyCode)
 
             // Escape cancels recording
@@ -23,11 +33,13 @@ private final class HotKeyRecorderMonitor: ObservableObject {
                 return nil
             }
 
-            // Convert NSEvent modifiers to Carbon layout and check at least one modifier
-            let modifiers = HotKey.carbonModifiers(from: nsModifiers)
-            let requiredModifiers: UInt32 = UInt32(cmdKey | optionKey | controlKey | shiftKey)
-            if modifiers & requiredModifiers == 0 { return event }
+            // At least one standard modifier required
+            if !nsFlags.contains(.command) && !nsFlags.contains(.control) && !nsFlags.contains(.option) && !nsFlags.contains(.shift) {
+                return event
+            }
 
+            // Convert NSEvent modifiers to Carbon layout for RegisterEventHotKey
+            let modifiers = Self.carbonModifiers(from: nsFlags)
             let hotKey = HotKey(keyCode: keyCode, modifiers: modifiers)
             viewModel.save(hotKey: hotKey)
             saveHotKey(hotKey)
