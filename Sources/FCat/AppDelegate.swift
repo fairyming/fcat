@@ -77,6 +77,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openHistory() {
+        DispatchQueue.main.async { self.doOpenHistory() }
+    }
+
+    private func doOpenHistory() {
         guard let store, let pasteboard else { return }
         if let historyWindow, historyWindow.isVisible {
             historyWindow.orderOut(nil)
@@ -98,6 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() {
+        DispatchQueue.main.async { self.doOpenSettings() }
+    }
+
+    private func doOpenSettings() {
         let view = HotKeyRecorderView(viewModel: settingsViewModel) { [weak self] hotKey in
             if hotKey.keyCode == 0 && hotKey.modifiers == 0 {
                 self?.hotKeyManager.unregister()
