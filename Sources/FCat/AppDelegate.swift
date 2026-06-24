@@ -106,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func doOpenSettings() {
-        let view = HotKeyRecorderView(viewModel: settingsViewModel) { [weak self] hotKey in
+        let view = SettingsView(viewModel: settingsViewModel) { [weak self] hotKey in
             if hotKey.keyCode == 0 && hotKey.modifiers == 0 {
                 self?.hotKeyManager.unregister()
             } else {
@@ -114,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 catch { self?.showError("Shortcut registration failed. Choose another shortcut.") }
             }
         }
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 520), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 460), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.contentView = NSHostingView(rootView: view)
         window.title = "FCat Settings"
         window.center()

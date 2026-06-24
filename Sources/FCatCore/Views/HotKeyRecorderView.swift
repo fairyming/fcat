@@ -23,10 +23,6 @@ private final class HotKeyRecorderMonitor: ObservableObject {
                 return nil
             }
 
-            // Allow standard editing shortcuts (Cmd+C/V/A/Z/X, even with extra modifier flags)
-            let editingKeyCodes: [UInt32] = [8, 9, 0, 6, 7] // C, V, A, Z, X
-            if (modifiers & UInt32(cmdKey)) != 0 && editingKeyCodes.contains(keyCode) { return event }
-
             // Require at least one modifier (Cmd, Option, Control, or Shift)
             let requiredModifiers: UInt32 = UInt32(cmdKey | optionKey | controlKey | shiftKey)
             if modifiers & requiredModifiers == 0 { return event }
@@ -48,7 +44,7 @@ private final class HotKeyRecorderMonitor: ObservableObject {
     }
 }
 
-public struct HotKeyRecorderView: View {
+public struct ShortcutSettingsView: View {
     @ObservedObject private var viewModel: SettingsViewModel
     @StateObject private var recorder = HotKeyRecorderMonitor()
     private let saveHotKey: (HotKey) -> Void
@@ -93,11 +89,24 @@ public struct HotKeyRecorderView: View {
                     .foregroundStyle(.green)
                     .font(.caption)
             }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onDisappear { recorder.stop() }
+    }
+}
 
-            Divider()
+public struct AISettingsView: View {
+    @ObservedObject private var viewModel: SettingsViewModel
 
+    public init(viewModel: SettingsViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
             Text("AI Actions")
-                .font(.title3.bold())
+                .font(.title2.bold())
 
             Picker("Provider", selection: $viewModel.aiProvider) {
                 ForEach(AIProvider.allCases) { provider in
@@ -139,7 +148,53 @@ public struct HotKeyRecorderView: View {
             }
         }
         .padding(24)
-        .frame(width: 520, height: 520)
-        .onDisappear { recorder.stop() }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+public enum SettingsTab: String, CaseIterable, Identifiable {
+    case shortcut
+    case ai
+    public var id: String { rawValue }
+    public var displayName: String {
+        switch self {
+        case .shortcut: return "Shortcut"
+        case .ai: return "AI Actions"
+        }
+    }
+}
+
+public struct SettingsView: View {
+    @ObservedObject private var viewModel: SettingsViewModel
+    @State private var selectedTab: SettingsTab = .shortcut
+    private let saveHotKey: (HotKey) -> Void
+
+    public init(viewModel: SettingsViewModel, saveHotKey: @escaping (HotKey) -> Void) {
+        self.viewModel = viewModel
+        self.saveHotKey = saveHotKey
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            Picker("", selection: $selectedTab) {
+                ForEach(SettingsTab.allCases) { tab in
+                    Text(tab.displayName).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+
+            Divider()
+
+            switch selectedTab {
+            case .shortcut:
+                ShortcutSettingsView(viewModel: viewModel, saveHotKey: saveHotKey)
+            case .ai:
+                AISettingsView(viewModel: viewModel)
+            }
+        }
+        .frame(width: 520, height: 460)
     }
 }
