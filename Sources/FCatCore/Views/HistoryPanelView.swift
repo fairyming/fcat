@@ -193,14 +193,22 @@ public struct HistoryPanelView: View {
                 return nil
             }
 
-            // Arrow keys navigate AI action selection when AI panel is open
-            if viewModel.aiActionsVisible && keyCode == kVK_UpArrow {
-                viewModel.moveAIActionSelection(delta: -1)
+            // Arrow keys: navigate AI actions when panel open, clipboard items otherwise
+            if keyCode == kVK_UpArrow {
+                if viewModel.aiActionsVisible {
+                    viewModel.moveAIActionSelection(delta: -1)
+                } else {
+                    viewModel.moveSelection(delta: -1)
+                }
                 return nil
             }
 
-            if viewModel.aiActionsVisible && keyCode == kVK_DownArrow {
-                viewModel.moveAIActionSelection(delta: 1)
+            if keyCode == kVK_DownArrow {
+                if viewModel.aiActionsVisible {
+                    viewModel.moveAIActionSelection(delta: 1)
+                } else {
+                    viewModel.moveSelection(delta: 1)
+                }
                 return nil
             }
 
