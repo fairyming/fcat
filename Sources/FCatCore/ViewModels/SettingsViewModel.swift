@@ -39,12 +39,8 @@ public final class SettingsViewModel: ObservableObject {
 
     public func saveAISettings() {
         aiSettingsStore.save(baseURL: aiBaseURL, model: aiModel, defaultLanguage: aiDefaultLanguage, timeoutSeconds: aiTimeoutSeconds)
-        do {
-            try aiSettingsStore.saveAPIKey(aiAPIKey)
-            aiSettingsMessage = "AI settings saved"
-        } catch {
-            aiSettingsMessage = "Failed to save API key"
-        }
+        aiSettingsStore.saveAPIKey(aiAPIKey)
+        aiSettingsMessage = "AI settings saved"
     }
 
     private static func load(defaults: UserDefaults, key: String) -> HotKey? {
