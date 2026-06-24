@@ -1,6 +1,6 @@
 # FCat - macOS 剪贴板历史管理工具
 
-一款基于 Swift/SwiftUI 构建的 macOS 菜单栏剪贴板历史管理工具。
+一款基于 Swift/SwiftUI 构建的 macOS 菜单栏剪贴板历史管理工具，支持 AI Actions。
 
 ## 功能特性
 
@@ -14,6 +14,28 @@
 - 键盘驱动操作：↑↓ 选择、Enter 复制/粘贴、⌘D 收藏、Fn⌫ 删除、Esc 关闭
 - 点击面板外部自动关闭
 - 圆角无边框弹窗设计，无标题栏和窗口按钮
+
+## AI Actions
+
+内置 AI 动作，对选中的剪贴板文本一键处理：
+
+- 翻译为中文 / 摘要 / 重写 / 解释代码 / 格式化 JSON
+
+支持两种 AI API 格式：
+
+| Provider | Endpoint | Auth Header | Response Format |
+|----------|----------|-------------|-----------------|
+| OpenAI Compatible | `/chat/completions` | `Authorization: Bearer` | `choices[].message.content` |
+| Anthropic | `/messages` | `x-api-key` + `anthropic-version` | `content[].text` |
+
+操作流程：
+
+1. Tab 或 ⌘K 打开 AI 动作面板
+2. ↑↓ 选择动作，Enter 运行
+3. 结果出来后，Enter 复制/粘贴结果（Debug: 复制，Release: 直接粘贴）
+4. Esc 清除结果，再 Esc 关闭面板
+
+AI 设置通过菜单栏 → Settings → AI Actions 标签页配置，与快捷键设置互不干扰。
 
 ## 构建与运行
 
@@ -62,8 +84,9 @@ Sources/
     Storage/      - SQLiteDatabase、ImageAssetStore、ClipboardStore
     Pasteboard/   - PasteboardClient、ClipboardMonitor
     HotKeys/      - GlobalHotKeyManager（Carbon API）
+    AI/           - AIAction、AIService、AISettings、AISettingsStore
     ViewModels/   - HistoryPanelViewModel、SettingsViewModel
-    Views/        - HistoryPanelView、HotKeyRecorderView（SwiftUI）
+    Views/        - HistoryPanelView、ShortcutSettingsView、AISettingsView、SettingsView（SwiftUI）
 Tests/
   FCatCoreTests/  - 自定义测试框架（TestRunner.swift）
 ```
