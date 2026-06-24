@@ -25,7 +25,7 @@ public enum AIServiceError: Error, Equatable, LocalizedError {
     case unsupportedItem
     case inputTooLong
     case invalidBaseURL
-    case httpStatus(Int)
+    case httpStatus(Int, String)
     case invalidResponse
 
     public var errorDescription: String? {
@@ -34,7 +34,7 @@ public enum AIServiceError: Error, Equatable, LocalizedError {
         case .unsupportedItem: return "AI actions only support text in this version."
         case .inputTooLong: return "Selected text is too long to send."
         case .invalidBaseURL: return "AI Base URL is invalid."
-        case .httpStatus(let status): return "AI request failed with HTTP \(status)."
+        case .httpStatus(let status, let url): return "AI request to \(url) failed with HTTP \(status)."
         case .invalidResponse: return "AI response could not be parsed."
         }
     }
@@ -55,7 +55,16 @@ public final class AIService: AIServiceProtocol {
         guard let input = item.contentText else { throw AIServiceError.invalidResponse }
         guard input.count <= maxInputCharacters else { throw AIServiceError.inputTooLong }
 
-        let trimmedBase = settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "/")))
+        switch settings.provider {
+        case .openAICompatible:
+            return try await runOpenAICompatible(action: action, input: input, settings: settings)
+        case .anthropic:
+            return try await runAnthropic(action: action, input: input, settings: settings)
+        }
+    }
+
+    private func runOpenAICompatible(action: AIAction, input: String, settings: AISettings) async throws -> String {
+        let trimmedBase = settings.effectiveBaseURL.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "/")))
         guard let url = URL(string: trimmedBase + "/chat/completions") else { throw AIServiceError.invalidBaseURL }
 
         var request = URLRequest(url: url, timeoutInterval: settings.timeoutSeconds)
@@ -68,7 +77,7 @@ public final class AIService: AIServiceProtocol {
         ))
 
         let (data, response) = try await httpClient.data(for: request)
-        guard (200..<300).contains(response.statusCode) else { throw AIServiceError.httpStatus(response.statusCode) }
+        guard (200..<300).contains(response.statusCode) else { throw AIServiceError.httpStatus(response.statusCode, url.absoluteString) }
         let decoded: ChatResponse
         do {
             decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
@@ -79,6 +88,35 @@ public final class AIService: AIServiceProtocol {
             throw AIServiceError.invalidResponse
         }
         return content
+    }
+
+    private func runAnthropic(action: AIAction, input: String, settings: AISettings) async throws -> String {
+        let trimmedBase = settings.effectiveBaseURL.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "/")))
+        guard let url = URL(string: trimmedBase + "/messages") else { throw AIServiceError.invalidBaseURL }
+
+        var request = URLRequest(url: url, timeoutInterval: settings.timeoutSeconds)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(settings.apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.httpBody = try JSONEncoder().encode(AnthropicRequest(
+            model: settings.model,
+            max_tokens: settings.maxTokens,
+            messages: [AnthropicMessage(role: "user", content: action.prompt(for: input, defaultLanguage: settings.defaultLanguage))]
+        ))
+
+        let (data, response) = try await httpClient.data(for: request)
+        guard (200..<300).contains(response.statusCode) else { throw AIServiceError.httpStatus(response.statusCode, url.absoluteString) }
+        let decoded: AnthropicResponse
+        do {
+            decoded = try JSONDecoder().decode(AnthropicResponse.self, from: data)
+        } catch {
+            throw AIServiceError.invalidResponse
+        }
+        guard let text = decoded.content.first?.text, !text.isEmpty else {
+            throw AIServiceError.invalidResponse
+        }
+        return text
     }
 }
 
@@ -103,4 +141,24 @@ private struct ChatResponse: Decodable {
     struct Choice: Decodable {
         let message: ResponseMessage
     }
+}
+
+private struct AnthropicRequest: Encodable {
+    let model: String
+    let max_tokens: Int
+    let messages: [AnthropicMessage]
+}
+
+private struct AnthropicMessage: Encodable {
+    let role: String
+    let content: String
+}
+
+private struct AnthropicResponse: Decodable {
+    let content: [AnthropicContentBlock]
+}
+
+private struct AnthropicContentBlock: Decodable {
+    let type: String
+    let text: String?
 }

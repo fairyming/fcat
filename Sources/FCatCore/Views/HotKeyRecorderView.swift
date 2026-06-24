@@ -54,6 +54,16 @@ public struct HotKeyRecorderView: View {
             Text("AI Actions")
                 .font(.title3.bold())
 
+            Picker("Provider", selection: $viewModel.aiProvider) {
+                ForEach(AIProvider.allCases) { provider in
+                    Text(provider.displayName).tag(provider)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: viewModel.aiProvider) { newValue in
+                viewModel.selectAIProvider(newValue)
+            }
+
             TextField("API Base URL", text: $viewModel.aiBaseURL)
                 .textFieldStyle(.roundedBorder)
 
@@ -69,6 +79,9 @@ public struct HotKeyRecorderView: View {
                 TextField("Timeout", value: $viewModel.aiTimeoutSeconds, format: .number)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 100)
+                TextField("Max Tokens", value: $viewModel.aiMaxTokens, format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
             }
 
             HStack {
@@ -81,15 +94,20 @@ public struct HotKeyRecorderView: View {
             }
         }
         .padding(24)
-        .frame(width: 520, height: 460)
+        .frame(width: 520, height: 520)
         .onDisappear { stopRecording() }
     }
 
     private func startRecording() {
         isRecording = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard self.isRecording else { return event }
             let modifiers = UInt32(event.modifierFlags.rawValue)
             let keyCode = UInt32(event.keyCode)
+
+            // Allow standard editing shortcuts (Cmd+C, Cmd+V, Cmd+A, Cmd+Z, Cmd+X)
+            let editingKeyCodes: [UInt32] = [8, 9, 0, 6, 7] // C, V, A, Z, X
+            if modifiers == UInt32(cmdKey) && editingKeyCodes.contains(keyCode) { return event }
 
             // Require at least one modifier (Cmd, Option, Control, or Shift)
             let requiredModifiers: UInt32 = UInt32(cmdKey | optionKey | controlKey | shiftKey)
