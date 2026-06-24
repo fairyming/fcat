@@ -20,6 +20,36 @@ public struct HistoryPanelView: View {
                 TextField("Search clipboard history", text: $viewModel.query)
                     .textFieldStyle(.roundedBorder)
                     .focused($searchFocused)
+
+                if viewModel.aiActionsVisible {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let selected = viewModel.selectedItem, selected.type == .text {
+                            ForEach(Array(viewModel.aiActions.enumerated()), id: \.element.id) { index, action in
+                                HStack {
+                                    Text(action.title)
+                                    Spacer()
+                                    if index == viewModel.selectedAIActionIndex { Text("\u{21A9}") }
+                                }
+                                .font(.system(size: 13))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(index == viewModel.selectedAIActionIndex ? Color.accentColor.opacity(0.18) : Color.clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    viewModel.selectedAIActionIndex = index
+                                    Task { await viewModel.runSelectedAIAction() }
+                                }
+                            }
+                        } else {
+                            Text("AI actions only support text in this version")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.controlBackgroundColor)))
+                }
             }
             .padding(12)
 
@@ -39,7 +69,7 @@ public struct HistoryPanelView: View {
                                 .lineLimit(1)
                                 .font(.system(size: 13))
                             Spacer()
-                            Text(item.isFavorite ? "★" : "☆")
+                            Text(item.isFavorite ? "\u{2605}" : "\u{2606}")
                                 .foregroundStyle(item.isFavorite ? .yellow : .secondary)
                                 .font(.system(size: 14))
                                 .onTapGesture { try? viewModel.toggleFavoriteSelected() }
@@ -62,39 +92,61 @@ public struct HistoryPanelView: View {
                 // Right: detail preview
                 if viewModel.visibleItems.indices.contains(viewModel.selectedIndex) {
                     let selectedItem = viewModel.visibleItems[viewModel.selectedIndex]
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 12) {
-                            if selectedItem.type == .image, let assetPath = selectedItem.assetPath {
-                                if let image = NSImage(contentsOfFile: assetPath) {
-                                    Image(nsImage: image)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .frame(maxHeight: .infinity)
-                                } else {
-                                    Text("Image not found")
-                                        .foregroundStyle(.secondary)
-                                }
-                            } else if let content = selectedItem.contentText {
-                                Text(content)
+                    Group {
+                        if viewModel.aiLoading {
+                            Text("Running AI action\u{2026}")
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else if let aiError = viewModel.aiError {
+                            Text(aiError)
+                                .foregroundStyle(.red)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                .padding(16)
+                        } else if let aiResult = viewModel.aiResult {
+                            ScrollView {
+                                Text(aiResult)
                                     .font(.system(size: 13))
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                            } else {
-                                Text("No content")
-                                    .foregroundStyle(.secondary)
+                                    .padding(16)
                             }
+                        } else {
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    if selectedItem.type == .image, let assetPath = selectedItem.assetPath {
+                                        if let image = NSImage(contentsOfFile: assetPath) {
+                                            Image(nsImage: image)
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fit)
+                                                .frame(maxHeight: .infinity)
+                                        } else {
+                                            Text("Image not found")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    } else if let content = selectedItem.contentText {
+                                        Text(content)
+                                            .font(.system(size: 13))
+                                            .textSelection(.enabled)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    } else {
+                                        Text("No content")
+                                            .foregroundStyle(.secondary)
+                                    }
 
-                            if let source = selectedItem.sourceAppName {
-                                HStack {
-                                    Text("Source:")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Text(source)
-                                        .font(.caption)
+                                    if let source = selectedItem.sourceAppName {
+                                        HStack {
+                                            Text("Source:")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Text(source)
+                                                .font(.caption)
+                                        }
+                                    }
                                 }
+                                .padding(16)
                             }
                         }
-                        .padding(16)
                     }
                     .frame(minWidth: 300)
                 } else {
@@ -109,11 +161,11 @@ public struct HistoryPanelView: View {
             // Bottom: shortcuts hint
             HStack(spacing: 8) {
                 #if DEBUG
-                Text("Enter = copy  |  ↑↓ = select  |  ⌘D = favorite  |  Fn⌫ = delete  |  Esc = close")
+                Text("Enter = copy  |  \u{2191}\u{2193} = select  |  \u{2318}D = favorite  |  Fn\u{232B} = delete  |  Esc = close  |  Tab/\u{2318}K = AI")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 #else
-                Text("Enter = paste  |  ↑↓ = select  |  ⌘D = favorite  |  Fn⌫ = delete  |  Esc = close")
+                Text("Enter = paste  |  \u{2191}\u{2193} = select  |  \u{2318}D = favorite  |  Fn\u{232B} = delete  |  Esc = close  |  Tab/\u{2318}K = AI")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 #endif
@@ -134,7 +186,49 @@ public struct HistoryPanelView: View {
             let keyCode = Int(event.keyCode)
             let modifiers = event.modifierFlags
 
+            // Tab / Cmd+K toggles AI actions
+            if keyCode == kVK_Tab || (keyCode == kVK_ANSI_K && modifiers.contains(.command)) {
+                if viewModel.aiActionsVisible { viewModel.closeAIActions() }
+                else { viewModel.openAIActions() }
+                return nil
+            }
+
+            // Cmd+Arrow keys navigate AI action selection when AI panel is open
+            if viewModel.aiActionsVisible && keyCode == kVK_UpArrow && modifiers.contains(.command) {
+                viewModel.moveAIActionSelection(delta: -1)
+                return nil
+            }
+
+            if viewModel.aiActionsVisible && keyCode == kVK_DownArrow && modifiers.contains(.command) {
+                viewModel.moveAIActionSelection(delta: 1)
+                return nil
+            }
+
+            // Enter runs selected AI action when AI panel is open
+            if viewModel.aiActionsVisible && keyCode == kVK_Return {
+                Task { await viewModel.runSelectedAIAction() }
+                return nil
+            }
+
+            // Cmd+C copies AI result
+            if viewModel.aiResult != nil && keyCode == kVK_ANSI_C && modifiers.contains(.command) {
+                try? viewModel.copyAIResult()
+                return nil
+            }
+
+            // Enter: AI result takes priority over normal copy/paste
             if keyCode == kVK_Return && modifiers.isDisjoint(with: [.command, .option, .control, .shift]) {
+                if viewModel.aiResult != nil {
+                    try? viewModel.copyAIResult()
+                    close()
+                    NSApp.hide(nil)
+                    #if !DEBUG
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        viewModel.simulatePaste()
+                    }
+                    #endif
+                    return nil
+                }
                 #if DEBUG
                 try? viewModel.copySelected()
                 close()
@@ -154,18 +248,14 @@ public struct HistoryPanelView: View {
                 return nil
             }
 
-            if keyCode == kVK_UpArrow {
-                viewModel.moveSelection(delta: -1)
-                return nil
-            }
-
-            if keyCode == kVK_DownArrow {
-                viewModel.moveSelection(delta: 1)
-                return nil
-            }
-
+            // Escape: dismiss AI state first, then close panel
             if keyCode == kVK_Escape {
-                close()
+                if viewModel.aiActionsVisible || viewModel.aiResult != nil || viewModel.aiError != nil {
+                    viewModel.closeAIActions()
+                    viewModel.clearAIOutput()
+                } else {
+                    close()
+                }
                 return nil
             }
 

@@ -35,6 +35,31 @@ struct FCatCoreTestRunner {
         try testHistoryViewModelCategoryFiltersItems()
         try testHistoryViewModelMoveSelectionClampsToVisibleItems()
         try testHistoryViewModelCopySelectedWritesToPasteboard()
+        try testAIActionsContainExpectedBuiltIns()
+        try testAIActionSupportsOnlyTextItems()
+        try testAIActionPromptUsesInputAndDefaultLanguage()
+        try testAISettingsValidationRequiresBaseURLModelAndAPIKey()
+        try testAISettingsStorePersistsNonSecretSettings()
+        try testAISettingsStoreSaveAPIKeyRoundTrip()
+        try testAISettingsWhitespaceOnlyIsIncomplete()
+        try testJSONFormatterFormatsValidJSON()
+        try testJSONFormatterRejectsInvalidJSON()
+        try awaitTestAIServiceBuildsOpenAICompatibleRequest()
+        try awaitTestAIServiceRejectsMissingConfiguration()
+        try awaitTestAIServiceRejectsLongTextBeforeNetwork()
+        try awaitTestAIServiceParsesSuccessfulResponse()
+        try awaitTestAIServiceRejectsNon2xxStatus()
+        try awaitTestAIServiceRejectsInvalidResponseJSON()
+        try awaitTestAIServiceRejectsUnsupportedItemType()
+        try awaitTestAIServiceRejectsTextItemWithNilContent()
+        try awaitTestAIServiceStripsWhitespaceFromBaseURL()
+        try testHistoryViewModelCopyAIResultWritesTextToPasteboard()
+        try testHistoryViewModelShowsUnsupportedMessageForImageAIAction()
+        try awaitTestHistoryViewModelRunsAIAction()
+        try testHistoryViewModelFormatsJSONLocally()
+        try testHistoryViewModelClearsAIResultWhenSelectionChanges()
+        try testHistoryViewModelClearsAIResultWhenQueryChanges()
+        try testHistoryViewModelClearsAIResultWhenCategoryChanges()
         print("FCatCoreTests passed")
     }
 
@@ -300,6 +325,278 @@ struct FCatCoreTestRunner {
         try expect(pasteboard.written.first?.previewTitle == "one", "copy selected writes pasteboard")
     }
 
+    static func testAIActionsContainExpectedBuiltIns() throws {
+        let actions = AIAction.builtIn
+        try expect(actions.map(\.id) == ["translate-zh", "summarize", "rewrite", "explain-code", "format-json"], "built-in AI action ids")
+        try expect(actions.map(\.title) == ["Translate to Chinese", "Summarize", "Rewrite", "Explain Code", "Format JSON"], "built-in AI action titles")
+    }
+
+    static func testAIActionSupportsOnlyTextItems() throws {
+        let text = makeItem(title: "text", type: .text)
+        let image = makeItem(title: "image", type: .image)
+        try expect(AIAction.summarize.supports(text), "AI action supports text")
+        try expect(!AIAction.summarize.supports(image), "AI action rejects image")
+    }
+
+    static func testAIActionPromptUsesInputAndDefaultLanguage() throws {
+        let prompt = AIAction.translateToChinese.prompt(for: "Hello", defaultLanguage: "中文")
+        try expect(prompt.contains("Translate the following text to 中文"), "translate prompt language")
+        try expect(prompt.contains("Hello"), "translate prompt input")
+    }
+
+    static func testAISettingsValidationRequiresBaseURLModelAndAPIKey() throws {
+        let complete = AISettings(baseURL: "https://api.example.com/v1", model: "test-model", defaultLanguage: "中文", timeoutSeconds: 30, apiKey: "secret")
+        try expect(complete.isComplete, "complete AI settings")
+
+        let missingKey = AISettings(baseURL: "https://api.example.com/v1", model: "test-model", defaultLanguage: "中文", timeoutSeconds: 30, apiKey: "")
+        try expect(!missingKey.isComplete, "missing API key")
+    }
+
+    static func testAISettingsStorePersistsNonSecretSettings() throws {
+        let defaults = UserDefaults(suiteName: "FCatTests.AISettings")!
+        defaults.removePersistentDomain(forName: "FCatTests.AISettings")
+
+        let store = AISettingsStore(defaults: defaults, keychain: InMemoryAPIKeyStore())
+        store.save(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 12)
+
+        let loaded = store.loadSettings()
+        try expect(loaded.baseURL == "https://api.example.com/v1", "stored AI base URL")
+        try expect(loaded.model == "model-a", "stored AI model")
+        try expect(loaded.defaultLanguage == "中文", "stored AI language")
+        try expect(loaded.timeoutSeconds == 12, "stored AI timeout")
+    }
+
+    static func testAISettingsStoreSaveAPIKeyRoundTrip() throws {
+        let defaults = UserDefaults(suiteName: "FCatTests.AISettings.APIKey")!
+        defaults.removePersistentDomain(forName: "FCatTests.AISettings.APIKey")
+
+        let keychain = InMemoryAPIKeyStore()
+        let store = AISettingsStore(defaults: defaults, keychain: keychain)
+        try store.saveAPIKey("secret")
+
+        let loaded = store.loadSettings()
+        try expect(loaded.apiKey == "secret", "saveAPIKey round trip")
+    }
+
+    static func testAISettingsWhitespaceOnlyIsIncomplete() throws {
+        let whitespaceSettings = AISettings(baseURL: "  ", model: "  ", defaultLanguage: "中文", timeoutSeconds: 30, apiKey: "  ")
+        try expect(!whitespaceSettings.isComplete, "whitespace-only AI settings are incomplete")
+    }
+
+    static func testJSONFormatterFormatsValidJSON() throws {
+        let formatted = try JSONFormatter.format("{\"b\":2,\"a\":1}")
+        try expect(formatted.contains("\n"), "formatted JSON has line breaks")
+        try expect(formatted.contains("\"a\""), "formatted JSON contains key")
+    }
+
+    static func testJSONFormatterRejectsInvalidJSON() throws {
+        do {
+            _ = try JSONFormatter.format("not json")
+            try expect(false, "invalid JSON should throw")
+        } catch {
+            try expect(true, "invalid JSON throws")
+        }
+    }
+
+    static func runAsync(_ operation: @escaping () async throws -> Void) throws {
+        var isFinished = false
+        var capturedError: Error?
+        Task {
+            do { try await operation() }
+            catch { capturedError = error }
+            isFinished = true
+        }
+
+        let deadline = Date(timeIntervalSinceNow: 10)
+        while !isFinished && Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
+        }
+
+        try expect(isFinished, "async test timed out")
+        if let capturedError { throw capturedError }
+    }
+
+    static func awaitTestAIServiceBuildsOpenAICompatibleRequest() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello world"), settings: settings)
+
+            try expect(client.lastRequest?.url?.absoluteString == "https://api.example.com/v1/chat/completions", "chat completions URL")
+            try expect(client.lastRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer secret", "authorization header")
+            let body = String(data: client.lastBody ?? Data(), encoding: .utf8) ?? ""
+            try expect(body.contains("\"model\":\"model-a\""), "request model")
+            try expect(body.contains("Summarize the following text"), "request prompt")
+        }
+    }
+
+    static func awaitTestAIServiceRejectsMissingConfiguration() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data(), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "", model: "", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "")
+            do {
+                _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+                try expect(false, "missing configuration should throw")
+            } catch AIServiceError.missingConfiguration {
+                try expect(client.lastRequest == nil, "missing configuration avoids network")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceRejectsLongTextBeforeNetwork() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data(), statusCode: 200)
+            let service = AIService(httpClient: client, maxInputCharacters: 5)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            do {
+                _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "123456"), settings: settings)
+                try expect(false, "long text should throw")
+            } catch AIServiceError.inputTooLong {
+                try expect(client.lastRequest == nil, "long input avoids network")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceParsesSuccessfulResponse() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"choices\":[{\"message\":{\"content\":\"summary result\"}}]}".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            let result = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+            try expect(result == "summary result", "AI response content")
+        }
+    }
+
+    static func awaitTestAIServiceRejectsNon2xxStatus() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"error\":\"unauthorized\"}".utf8), statusCode: 401)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "bad-key")
+            do {
+                _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+                try expect(false, "non-2xx should throw")
+            } catch AIServiceError.httpStatus(let status) {
+                try expect(status == 401, "httpStatus is 401")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceRejectsInvalidResponseJSON() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("not valid json".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            do {
+                _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+                try expect(false, "invalid JSON should throw")
+            } catch AIServiceError.invalidResponse {
+                try expect(true, "invalidResponse thrown for unparseable JSON")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceRejectsUnsupportedItemType() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data(), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            let imageItem = makeItem(title: "image", type: .image, content: nil)
+            do {
+                _ = try await service.run(action: .summarize, item: imageItem, settings: settings)
+                try expect(false, "unsupported item type should throw")
+            } catch AIServiceError.unsupportedItem {
+                try expect(client.lastRequest == nil, "unsupported item avoids network")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceRejectsTextItemWithNilContent() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data(), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "https://api.example.com/v1", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            let baseDate = Date(timeIntervalSince1970: 1_700_000_000)
+            let textNoContent = ClipboardItem(
+                id: UUID(), type: .text, previewTitle: "empty text", contentText: nil, assetPath: nil,
+                sourceAppName: nil, createdAt: baseDate, lastUsedAt: baseDate, isFavorite: false,
+                contentHash: "hash-nil-content"
+            )
+            do {
+                _ = try await service.run(action: .summarize, item: textNoContent, settings: settings)
+                try expect(false, "text item with nil content should throw")
+            } catch AIServiceError.invalidResponse {
+                try expect(client.lastRequest == nil, "nil content text avoids network")
+            }
+        }
+    }
+
+    static func awaitTestAIServiceStripsWhitespaceFromBaseURL() throws {
+        try runAsync {
+            let client = FakeAIHTTPClient(responseData: Data("{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}".utf8), statusCode: 200)
+            let service = AIService(httpClient: client)
+            let settings = AISettings(baseURL: "  https://api.example.com/v1/  \n", model: "model-a", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret")
+            _ = try await service.run(action: .summarize, item: makeItem(title: "hello", content: "Hello"), settings: settings)
+            try expect(client.lastRequest?.url?.absoluteString == "https://api.example.com/v1/chat/completions", "whitespace and trailing slash stripped from base URL")
+        }
+    }
+
+    static func testHistoryViewModelCopyAIResultWritesTextToPasteboard() throws {
+        let pasteboard = WritableFakePasteboard()
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "source")]), pasteboard: pasteboard)
+        viewModel.aiResult = "AI output"
+        try viewModel.copyAIResult()
+        try expect(pasteboard.writtenText == "AI output", "AI result written as text")
+    }
+
+    static func testHistoryViewModelShowsUnsupportedMessageForImageAIAction() throws {
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "image", type: .image)]), pasteboard: WritableFakePasteboard())
+        viewModel.openAIActions()
+        try expect(viewModel.aiError == "AI actions only support text in this version.", "unsupported AI action message")
+    }
+
+    static func awaitTestHistoryViewModelRunsAIAction() throws {
+        try runAsync {
+            let aiService = FakeAIService(result: "summary")
+            let settingsStore = StaticAISettingsStore(settings: AISettings(baseURL: "https://api.example.com/v1", model: "model", defaultLanguage: "中文", timeoutSeconds: 10, apiKey: "secret"))
+            let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "source", content: "Hello")]), pasteboard: WritableFakePasteboard(), aiService: aiService, aiSettingsStore: settingsStore)
+            await viewModel.runSelectedAIAction()
+            try expect(viewModel.aiResult == "summary", "AI result state")
+            try expect(!viewModel.aiLoading, "AI loading cleared")
+        }
+    }
+
+    static func testHistoryViewModelFormatsJSONLocally() throws {
+        let aiService = FakeAIService(result: "should not be used")
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "json", content: "{\"a\":1}")]), pasteboard: WritableFakePasteboard(), aiService: aiService)
+        viewModel.selectedAIActionIndex = 4
+        viewModel.runSelectedAIActionSynchronouslyForLocalActions()
+        try expect(viewModel.aiResult?.contains("\"a\"") == true, "local JSON result")
+        try expect(aiService.calls == 0, "JSON formatter skips AI service")
+    }
+
+    static func testHistoryViewModelClearsAIResultWhenSelectionChanges() throws {
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "one"), makeItem(title: "two")]), pasteboard: WritableFakePasteboard())
+        viewModel.aiResult = "old"
+        viewModel.moveSelection(delta: 1)
+        try expect(viewModel.aiResult == nil, "selection change clears AI result")
+    }
+
+    static func testHistoryViewModelClearsAIResultWhenQueryChanges() throws {
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "one"), makeItem(title: "two")]), pasteboard: WritableFakePasteboard())
+        viewModel.aiResult = "old"
+        viewModel.query = "two"
+        try expect(viewModel.aiResult == nil, "query change clears AI result")
+    }
+
+    static func testHistoryViewModelClearsAIResultWhenCategoryChanges() throws {
+        let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "one"), makeItem(title: "image", type: .image)]), pasteboard: WritableFakePasteboard())
+        viewModel.aiError = "old"
+        viewModel.category = .images
+        try expect(viewModel.aiError == nil, "category change clears AI error")
+    }
+
     static func makeStore(directory: URL, imageCountLimit: Int = 100, imageByteLimit: Int64 = 500 * 1024 * 1024) throws -> ClipboardStore {
         try ClipboardStore(databaseURL: directory.appendingPathComponent("history.sqlite"), imageCountLimit: imageCountLimit, imageByteLimit: imageByteLimit)
     }
@@ -310,13 +607,13 @@ struct FCatCoreTestRunner {
         return directory
     }
 
-    static func makeItem(title: String, type: ClipboardContentType = .text, text: String? = nil, favorite: Bool = false, hash: String? = nil, assetPath: String? = nil, lastUsedOffset: TimeInterval = 0) -> ClipboardItem {
+    static func makeItem(title: String, type: ClipboardContentType = .text, text: String? = nil, content: String? = nil, favorite: Bool = false, hash: String? = nil, assetPath: String? = nil, lastUsedOffset: TimeInterval = 0) -> ClipboardItem {
         let baseDate = Date(timeIntervalSince1970: 1_700_000_000)
         return ClipboardItem(
             id: UUID(),
             type: type,
             previewTitle: title,
-            contentText: text ?? title,
+            contentText: content ?? text ?? title,
             assetPath: assetPath,
             sourceAppName: nil,
             createdAt: baseDate.addingTimeInterval(lastUsedOffset),
@@ -338,13 +635,16 @@ struct FakePasteboard: PasteboardClient {
     func currentChangeCount() -> Int { changeCount }
     func readSnapshot() -> PasteboardSnapshot? { snapshot }
     func write(_ item: ClipboardItem) throws {}
+    func writeText(_ text: String) throws {}
 }
 
 final class WritableFakePasteboard: PasteboardClient {
     var written: [ClipboardItem] = []
+    var writtenText: String?
     func currentChangeCount() -> Int { 0 }
     func readSnapshot() -> PasteboardSnapshot? { nil }
     func write(_ item: ClipboardItem) throws { written.append(item) }
+    func writeText(_ text: String) throws { writtenText = text }
 }
 
 enum TestFailure: Error, CustomStringConvertible {
@@ -359,4 +659,48 @@ enum TestFailure: Error, CustomStringConvertible {
 
 func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     if !condition() { throw TestFailure.failed(message) }
+}
+
+final class InMemoryAPIKeyStore: APIKeyStore {
+    var value = ""
+
+    func loadAPIKey() -> String { value }
+    func saveAPIKey(_ apiKey: String) throws { value = apiKey }
+}
+
+final class FakeAIHTTPClient: AIHTTPClient {
+    var responseData: Data
+    var statusCode: Int
+    var lastRequest: URLRequest?
+    var lastBody: Data?
+
+    init(responseData: Data, statusCode: Int) {
+        self.responseData = responseData
+        self.statusCode = statusCode
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        lastRequest = request
+        lastBody = request.httpBody
+        let response = HTTPURLResponse(url: request.url!, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
+        return (responseData, response)
+    }
+}
+
+final class FakeAIService: AIServiceProtocol {
+    var result: String
+    var calls = 0
+
+    init(result: String) { self.result = result }
+
+    func run(action: AIAction, item: ClipboardItem, settings: AISettings) async throws -> String {
+        calls += 1
+        return result
+    }
+}
+
+final class StaticAISettingsStore: AISettingsProviding {
+    let settings: AISettings
+    init(settings: AISettings) { self.settings = settings }
+    func loadSettings() -> AISettings { settings }
 }

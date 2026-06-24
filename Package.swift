@@ -12,7 +12,10 @@ let package = Package(
     targets: [
         .target(
             name: "FCatCore",
-            linkerSettings: [.linkedLibrary("sqlite3")]
+            linkerSettings: [
+                .linkedLibrary("sqlite3"),
+                .linkedFramework("Security")
+            ]
         ),
         .executableTarget(
             name: "FCat",
