@@ -7,6 +7,25 @@ import SwiftUI
 import UniformTypeIdentifiers
 import Vision
 
+final class KeyboardCommitTextView: NSTextView {
+    var commit: (() -> Void)?
+    var cancel: (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        if (event.keyCode == 36 || event.keyCode == 76),
+           !event.modifierFlags.contains(.shift) {
+            commit?()
+            return
+        }
+        switch event.keyCode {
+        case 53:
+            cancel?()
+        default:
+            super.keyDown(with: event)
+        }
+    }
+}
+
 final class BorderlessWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override func resignKey() {
@@ -242,7 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 480, height: 240))
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .bezelBorder
-        let textView = NSTextView(frame: scrollView.bounds)
+        let textView = KeyboardCommitTextView(frame: scrollView.bounds)
         textView.isRichText = false
         textView.font = .systemFont(ofSize: 13)
         textView.string = originalText
@@ -250,13 +269,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let alert = NSAlert()
         alert.messageText = "Edit Clipboard Text"
-        alert.informativeText = "The edited text will be copied without changing the saved history item."
+        alert.informativeText = "Enter to copy · Shift+Enter for a new line · Esc to cancel"
         alert.accessoryView = scrollView
         alert.addButton(withTitle: "Copy")
         alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        do { try pasteboard?.writeText(textView.string) }
-        catch { showError(error.localizedDescription) }
+        let copyEditedText = { [weak self, weak textView] in
+            guard let text = textView?.string else { return }
+            do { try self?.pasteboard?.writeText(text) }
+            catch { self?.showError(error.localizedDescription) }
+        }
+        textView.commit = { [weak alert] in
+            NSApp.abortModal()
+            alert?.window.orderOut(nil)
+            copyEditedText()
+        }
+        textView.cancel = { [weak alert] in
+            NSApp.abortModal()
+            alert?.window.orderOut(nil)
+        }
+        alert.window.initialFirstResponder = textView
+        if alert.runModal() == .alertFirstButtonReturn {
+            copyEditedText()
+        }
     }
 
     private func saveImage(_ item: ClipboardItem) throws {

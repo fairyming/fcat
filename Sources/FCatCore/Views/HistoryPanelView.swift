@@ -219,7 +219,8 @@ public struct HistoryPanelView: View {
     }
 
     private func installKeyMonitor() {
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak historyWindow = NSApp.keyWindow] event in
+            guard let historyWindow, event.window === historyWindow else { return event }
             let keyCode = Int(event.keyCode)
             let modifiers = event.modifierFlags
 
