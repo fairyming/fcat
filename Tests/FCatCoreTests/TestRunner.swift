@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import FCatCore
 
@@ -17,6 +18,7 @@ struct FCatCoreTestRunner {
         try testCaseInsensitiveMatch()
         try testSearchFiltersFavoritesCategory()
         try testSearchFiltersImagesCategory()
+        try testSearchFiltersTextsCategory()
         try testFavoritesSortBeforeNonFavoritesForSearch()
         try testTitleMatchBeatsBodyMatch()
         try testInsertedItemPersistsAcrossStoreInstances()
@@ -35,6 +37,8 @@ struct FCatCoreTestRunner {
         try testImageDataCreatesImageItemWithAssetPath()
         try testHistoryViewModelSearchFiltersItems()
         try testHistoryViewModelCategoryFiltersItems()
+        try testHistoryViewModelCachesStoreItemsAcrossFiltering()
+        try testHistoryViewModelPublishesOneChangeForCategoryFilter()
         try testHistoryViewModelMoveSelectionClampsToVisibleItems()
         try testHistoryViewModelCopySelectedWritesToPasteboard()
         try testAIActionsContainExpectedBuiltIns()
@@ -120,6 +124,7 @@ struct FCatCoreTestRunner {
 
     static func testClipboardCategoryIDsMatchRawValues() throws {
         try expect(ClipboardCategory.all.id == "All", "all category id")
+        try expect(ClipboardCategory.texts.id == "Text", "text category id")
         try expect(ClipboardCategory.favorites.id == "Favorites", "favorites category id")
         try expect(ClipboardCategory.images.id == "Images", "images category id")
         try expect(ClipboardCategory.files.id == "Files", "files category id")
@@ -153,6 +158,12 @@ struct FCatCoreTestRunner {
         let items = [makeItem(title: "text", type: .text), makeItem(title: "image", type: .image)]
         let results = SearchService.search(items: items, query: "", category: .images)
         try expect(results.map(\.type) == [.image], "images category filter")
+    }
+
+    static func testSearchFiltersTextsCategory() throws {
+        let items = [makeItem(title: "text", type: .text), makeItem(title: "image", type: .image), makeItem(title: "file", type: .file)]
+        let results = SearchService.search(items: items, query: "", category: .texts)
+        try expect(results.map(\.type) == [.text], "texts category filter")
     }
 
     static func testFavoritesSortBeforeNonFavoritesForSearch() throws {
@@ -338,6 +349,31 @@ struct FCatCoreTestRunner {
         let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "text", type: .text), makeItem(title: "image", type: .image)]), pasteboard: WritableFakePasteboard())
         viewModel.category = .images
         try expect(viewModel.visibleItems.map(\.type) == [.image], "view model category filter")
+    }
+
+    static func testHistoryViewModelCachesStoreItemsAcrossFiltering() throws {
+        let store = CountingHistoryStore(items: [
+            makeItem(title: "text", type: .text),
+            makeItem(title: "image", type: .image)
+        ])
+        let viewModel = HistoryPanelViewModel(store: store, pasteboard: WritableFakePasteboard())
+        _ = viewModel.visibleItems
+        viewModel.category = .images
+        _ = viewModel.visibleItems
+        viewModel.category = .all
+        try expect(store.fetchCount == 1, "view model fetches store once while filtering")
+    }
+
+    static func testHistoryViewModelPublishesOneChangeForCategoryFilter() throws {
+        let viewModel = HistoryPanelViewModel(
+            store: InMemoryHistoryStore(items: [makeItem(title: "text")]),
+            pasteboard: WritableFakePasteboard()
+        )
+        var changeCount = 0
+        let observation = viewModel.objectWillChange.sink { changeCount += 1 }
+        viewModel.category = .texts
+        try expect(changeCount == 1, "category filter publishes one UI update")
+        withExtendedLifetime(observation) {}
     }
 
     static func testHistoryViewModelMoveSelectionClampsToVisibleItems() throws {
@@ -744,6 +780,26 @@ struct FCatCoreTestRunner {
 final class CapturingSink: ClipboardItemSink {
     var items: [ClipboardItem] = []
     func ingest(_ item: ClipboardItem) throws { items.append(item) }
+}
+
+final class CountingHistoryStore: HistoryStore {
+    var items: [ClipboardItem]
+    var fetchCount = 0
+
+    init(items: [ClipboardItem]) { self.items = items }
+
+    func fetchAll() throws -> [ClipboardItem] {
+        fetchCount += 1
+        return items
+    }
+
+    func toggleFavorite(id: UUID) throws {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].isFavorite.toggle()
+    }
+
+    func delete(id: UUID) throws { items.removeAll { $0.id == id } }
+    func clearNonFavorites() throws { items.removeAll { !$0.isFavorite } }
 }
 
 struct FakePasteboard: PasteboardClient {

@@ -9,29 +9,44 @@ import CoreGraphics
 #endif
 
 public final class HistoryPanelViewModel: ObservableObject {
-    @Published public var query: String = "" {
-        didSet {
-            selectedIndex = 0
+    private var storedQuery = ""
+    public var query: String {
+        get { storedQuery }
+        set {
+            guard newValue != storedQuery else { return }
+            objectWillChange.send()
+            storedQuery = newValue
+            refreshVisibleItems()
+            if selectedIndex != 0 { selectedIndex = 0 }
             clearAIOutput()
         }
     }
-    @Published public var category: ClipboardCategory = .all {
-        didSet {
-            selectedIndex = 0
+
+    private var storedCategory: ClipboardCategory = .all
+    public var category: ClipboardCategory {
+        get { storedCategory }
+        set {
+            guard newValue != storedCategory else { return }
+            objectWillChange.send()
+            storedCategory = newValue
+            refreshVisibleItems()
+            if selectedIndex != 0 { selectedIndex = 0 }
             clearAIOutput()
         }
     }
-    @Published public private(set) var selectedIndex: Int = 0
+    public private(set) var selectedIndex: Int = 0
     @Published public var actionsVisible: Bool = false
     @Published public var selectedAIActionIndex: Int = 0
     @Published public var aiLoading: Bool = false
     @Published public var aiResult: String?
     @Published public var aiError: String?
+    public private(set) var visibleItems: [ClipboardItem] = []
 
     private let store: HistoryStore
     private let pasteboard: PasteboardClient
     private let aiService: AIServiceProtocol
     private let aiSettingsStore: AISettingsProviding
+    private var allItems: [ClipboardItem] = []
 
     public init(
         store: HistoryStore,
@@ -43,11 +58,7 @@ public final class HistoryPanelViewModel: ObservableObject {
         self.pasteboard = pasteboard
         self.aiService = aiService
         self.aiSettingsStore = aiSettingsStore
-    }
-
-    public var visibleItems: [ClipboardItem] {
-        let items = (try? store.fetchAll()) ?? []
-        return SearchService.search(items: items, query: query, category: category)
+        reloadItems(selecting: nil, notify: false)
     }
 
     public var aiActions: [AIAction] { AIAction.builtIn }
@@ -65,6 +76,7 @@ public final class HistoryPanelViewModel: ObservableObject {
         let maxIndex = max(visibleItems.count - 1, 0)
         let newIndex = min(max(selectedIndex + delta, 0), maxIndex)
         if newIndex != selectedIndex {
+            objectWillChange.send()
             selectedIndex = newIndex
             clearAIOutput()
         }
@@ -74,6 +86,7 @@ public final class HistoryPanelViewModel: ObservableObject {
         let maxIndex = max(visibleItems.count - 1, 0)
         let newIndex = min(max(index, 0), maxIndex)
         if newIndex != selectedIndex {
+            objectWillChange.send()
             selectedIndex = newIndex
             clearAIOutput()
         }
@@ -133,9 +146,9 @@ public final class HistoryPanelViewModel: ObservableObject {
     }
 
     public func clearAIOutput() {
-        aiResult = nil
-        aiError = nil
-        aiLoading = false
+        if aiResult != nil { aiResult = nil }
+        if aiError != nil { aiError = nil }
+        if aiLoading { aiLoading = false }
     }
 
     #if !DEBUG
@@ -165,20 +178,42 @@ public final class HistoryPanelViewModel: ObservableObject {
 
     public func toggleFavoriteSelected() throws {
         guard visibleItems.indices.contains(selectedIndex) else { return }
-        try store.toggleFavorite(id: visibleItems[selectedIndex].id)
-        objectWillChange.send()
+        let id = visibleItems[selectedIndex].id
+        try store.toggleFavorite(id: id)
+        reloadItems(selecting: id)
     }
 
     public func deleteSelected() throws {
         guard visibleItems.indices.contains(selectedIndex) else { return }
         try store.delete(id: visibleItems[selectedIndex].id)
-        selectedIndex = min(selectedIndex, max(visibleItems.count - 1, 0))
-        objectWillChange.send()
+        let nextIndex = selectedIndex
+        reloadItems()
+        selectedIndex = min(nextIndex, max(visibleItems.count - 1, 0))
     }
 
     public func clearNonFavorites() throws {
         try store.clearNonFavorites()
+        reloadItems()
         selectedIndex = 0
-        objectWillChange.send()
+    }
+
+    public func reloadItems() {
+        reloadItems(selecting: selectedItem?.id)
+    }
+
+    private func reloadItems(selecting selectedID: UUID? = nil, notify: Bool = true) {
+        if notify { objectWillChange.send() }
+        allItems = (try? store.fetchAll()) ?? []
+        refreshVisibleItems()
+        if let selectedID,
+           let index = visibleItems.firstIndex(where: { $0.id == selectedID }) {
+            selectedIndex = index
+        } else {
+            selectedIndex = min(selectedIndex, max(visibleItems.count - 1, 0))
+        }
+    }
+
+    private func refreshVisibleItems() {
+        visibleItems = SearchService.search(items: allItems, query: query, category: category)
     }
 }

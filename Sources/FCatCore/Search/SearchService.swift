@@ -6,6 +6,8 @@ public enum SearchService {
             switch category {
             case .all:
                 return true
+            case .texts:
+                return item.type == .text
             case .favorites:
                 return item.isFavorite
             case .images:

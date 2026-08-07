@@ -2,6 +2,16 @@ import Carbon
 import AppKit
 import SwiftUI
 
+private let historyImageCache = NSCache<NSString, NSImage>()
+
+private func cachedHistoryImage(at path: String) -> NSImage? {
+    let key = path as NSString
+    if let image = historyImageCache.object(forKey: key) { return image }
+    guard let image = NSImage(contentsOfFile: path) else { return nil }
+    historyImageCache.setObject(image, forKey: key)
+    return image
+}
+
 public enum ClipboardContextAction {
     case copy
     case paste
@@ -55,6 +65,15 @@ public struct HistoryPanelView: View {
                 TextField("Search clipboard history", text: $viewModel.query)
                     .textFieldStyle(.roundedBorder)
                     .focused($searchFocused)
+
+                Picker("Type", selection: $viewModel.category) {
+                    ForEach(ClipboardCategory.allCases) { category in
+                        Text(category.rawValue).tag(category)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .help("Filter by type · Control+1…5")
 
                 if viewModel.actionsVisible {
                     ScrollView {
@@ -113,6 +132,10 @@ public struct HistoryPanelView: View {
                         .id(index)
                         .onTapGesture { viewModel.select(index: index) }
                     }
+                    .id(viewModel.category)
+                    .transaction { transaction in
+                        transaction.animation = nil
+                    }
                     .frame(minWidth: 220)
                     .onChange(of: viewModel.selectedIndex) { newIndex in
                         withAnimation(.easeInOut(duration: 0.12)) {
@@ -147,7 +170,7 @@ public struct HistoryPanelView: View {
                             ScrollView {
                                 VStack(alignment: .leading, spacing: 12) {
                                     if selectedItem.type == .image, let assetPath = selectedItem.assetPath {
-                                        if let image = NSImage(contentsOfFile: assetPath) {
+                                        if let image = cachedHistoryImage(at: assetPath) {
                                             Image(nsImage: image)
                                                 .resizable()
                                                 .aspectRatio(contentMode: .fit)
@@ -223,6 +246,12 @@ public struct HistoryPanelView: View {
             guard let historyWindow, event.window === historyWindow else { return event }
             let keyCode = Int(event.keyCode)
             let modifiers = event.modifierFlags
+
+            if modifiers.contains(.control),
+               let category = categoryShortcut(for: keyCode) {
+                viewModel.category = category
+                return nil
+            }
 
             // Tab / Cmd+K toggles actions for the selected content type.
             if keyCode == kVK_Tab || (keyCode == kVK_ANSI_K && modifiers.contains(.command)) {
@@ -343,6 +372,17 @@ public struct HistoryPanelView: View {
         case .text: return "T"
         case .image: return "I"
         case .file: return "F"
+        }
+    }
+
+    private func categoryShortcut(for keyCode: Int) -> ClipboardCategory? {
+        switch keyCode {
+        case kVK_ANSI_1: return .all
+        case kVK_ANSI_2: return .texts
+        case kVK_ANSI_3: return .images
+        case kVK_ANSI_4: return .files
+        case kVK_ANSI_5: return .favorites
+        default: return nil
         }
     }
 
