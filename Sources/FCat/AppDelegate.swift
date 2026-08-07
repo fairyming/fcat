@@ -4,6 +4,8 @@ import ApplicationServices
 #endif
 import FCatCore
 import SwiftUI
+import UniformTypeIdentifiers
+import Vision
 
 final class BorderlessWindow: NSWindow {
     override var canBecomeKey: Bool { true }
@@ -116,7 +118,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = HistoryPanelView(
             viewModel: viewModel,
             close: { [weak self] in self?.historyWindow?.orderOut(nil) },
-            pinImage: { [weak self] item in self?.pinImage(item) }
+            pinImage: { [weak self] item in self?.pinImage(item) },
+            performContextAction: { [weak self] action, item in
+                self?.performContextAction(action, on: item)
+            }
         )
         let window = BorderlessWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 520), styleMask: .borderless, backing: .buffered, defer: false)
         window.contentView = NSHostingView(rootView: view)
@@ -182,6 +187,142 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyWindow?.orderOut(nil)
     }
 
+    private func performContextAction(_ action: ClipboardContextAction, on item: ClipboardItem) {
+        do {
+            switch action {
+            case .copy:
+                try pasteboard?.write(item)
+            case .paste:
+                try pasteboard?.write(item)
+                pasteFromClipboard()
+            case .pastePlainText:
+                try pasteboard?.writeText(item.contentText ?? "")
+                pasteFromClipboard()
+            case .editAndCopy:
+                editAndCopy(item.contentText ?? "")
+            case .pinImage:
+                pinImage(item)
+            case .saveImage:
+                try saveImage(item)
+            case .recognizeText:
+                recognizeText(in: item)
+            case .compressImage:
+                try compressImage(item)
+            case .revealInFinder:
+                revealInFinder(item)
+            case .copyFilePaths:
+                try pasteboard?.writeText(item.contentText ?? "")
+            case .copyFileNames:
+                let names = filePaths(in: item).map { URL(fileURLWithPath: $0).lastPathComponent }
+                try pasteboard?.writeText(names.joined(separator: "\n"))
+            }
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    private func pasteFromClipboard() {
+        historyWindow?.orderOut(nil)
+        NSApp.hide(nil)
+        #if !DEBUG
+        guard HistoryPanelViewModel.isAccessibilityTrusted(prompt: true) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            let source = CGEventSource(stateID: .hidSystemState)
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true)
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
+            keyDown?.flags = .maskCommand
+            keyUp?.flags = .maskCommand
+            keyDown?.post(tap: .cghidEventTap)
+            keyUp?.post(tap: .cghidEventTap)
+        }
+        #endif
+    }
+
+    private func editAndCopy(_ originalText: String) {
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 480, height: 240))
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .bezelBorder
+        let textView = NSTextView(frame: scrollView.bounds)
+        textView.isRichText = false
+        textView.font = .systemFont(ofSize: 13)
+        textView.string = originalText
+        scrollView.documentView = textView
+
+        let alert = NSAlert()
+        alert.messageText = "Edit Clipboard Text"
+        alert.informativeText = "The edited text will be copied without changing the saved history item."
+        alert.accessoryView = scrollView
+        alert.addButton(withTitle: "Copy")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do { try pasteboard?.writeText(textView.string) }
+        catch { showError(error.localizedDescription) }
+    }
+
+    private func saveImage(_ item: ClipboardItem) throws {
+        guard let path = item.assetPath else { throw ContextActionError.imageUnavailable }
+        let sourceURL = URL(fileURLWithPath: path)
+        let panel = NSSavePanel()
+        panel.title = "Save Clipboard Image"
+        panel.nameFieldStringValue = "Clipboard Image.png"
+        panel.allowedContentTypes = [.png]
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        try FileManager.default.copyItemReplacingExisting(at: sourceURL, to: destination)
+    }
+
+    private func compressImage(_ item: ClipboardItem) throws {
+        guard let path = item.assetPath,
+              let image = NSImage(contentsOfFile: path),
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let data = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.7]) else {
+            throw ContextActionError.imageUnavailable
+        }
+        let panel = NSSavePanel()
+        panel.title = "Save Compressed Image"
+        panel.nameFieldStringValue = "Clipboard Image.jpg"
+        panel.allowedContentTypes = [.jpeg]
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        try data.write(to: destination, options: .atomic)
+    }
+
+    private func recognizeText(in item: ClipboardItem) {
+        guard let path = item.assetPath else {
+            showError(ContextActionError.imageUnavailable.localizedDescription)
+            return
+        }
+        let request = VNRecognizeTextRequest { [weak self] request, error in
+            let text = (request.results as? [VNRecognizedTextObservation])?
+                .compactMap { $0.topCandidates(1).first?.string }
+                .joined(separator: "\n") ?? ""
+            DispatchQueue.main.async {
+                if let error { self?.showError(error.localizedDescription); return }
+                guard !text.isEmpty else {
+                    self?.showError("No text was recognized in this image.")
+                    return
+                }
+                do { try self?.pasteboard?.writeText(text) }
+                catch { self?.showError(error.localizedDescription) }
+            }
+        }
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do { try VNImageRequestHandler(url: URL(fileURLWithPath: path)).perform([request]) }
+            catch { DispatchQueue.main.async { self?.showError(error.localizedDescription) } }
+        }
+    }
+
+    private func revealInFinder(_ item: ClipboardItem) {
+        let urls = filePaths(in: item).map { URL(fileURLWithPath: $0) }
+        guard !urls.isEmpty else { showError("No file path is available."); return }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
+    private func filePaths(in item: ClipboardItem) -> [String] {
+        (item.contentText ?? "").split(separator: "\n").map(String.init)
+    }
+
     private func appSupportDirectory() throws -> URL {
         let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         let directory = base.appendingPathComponent("FCat", isDirectory: true)
@@ -193,5 +334,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.messageText = message
         alert.runModal()
+    }
+}
+
+private enum ContextActionError: LocalizedError {
+    case imageUnavailable
+
+    var errorDescription: String? {
+        "The selected image could not be opened."
+    }
+}
+
+private extension FileManager {
+    func copyItemReplacingExisting(at source: URL, to destination: URL) throws {
+        if fileExists(atPath: destination.path) { try removeItem(at: destination) }
+        try copyItem(at: source, to: destination)
     }
 }

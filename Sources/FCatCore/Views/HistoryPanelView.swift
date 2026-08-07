@@ -2,21 +2,50 @@ import Carbon
 import AppKit
 import SwiftUI
 
+public enum ClipboardContextAction {
+    case copy
+    case paste
+    case pastePlainText
+    case editAndCopy
+    case pinImage
+    case saveImage
+    case recognizeText
+    case compressImage
+    case revealInFinder
+    case copyFilePaths
+    case copyFileNames
+}
+
+private enum ActionMenuKind {
+    case clipboard(ClipboardContextAction)
+    case ai(Int)
+}
+
+private struct ActionMenuEntry: Identifiable {
+    let id: String
+    let title: String
+    let kind: ActionMenuKind
+}
+
 public struct HistoryPanelView: View {
     @ObservedObject private var viewModel: HistoryPanelViewModel
     @FocusState private var searchFocused: Bool
     @State private var keyMonitor: Any?
+    @State private var selectedActionIndex = 0
     private let close: () -> Void
     private let pinImage: (ClipboardItem) -> Void
+    private let performContextAction: (ClipboardContextAction, ClipboardItem) -> Void
 
     public init(
         viewModel: HistoryPanelViewModel,
         close: @escaping () -> Void,
-        pinImage: @escaping (ClipboardItem) -> Void = { _ in }
+        pinImage: @escaping (ClipboardItem) -> Void = { _ in },
+        performContextAction: @escaping (ClipboardContextAction, ClipboardItem) -> Void = { _, _ in }
     ) {
         self.viewModel = viewModel
         self.close = close
         self.pinImage = pinImage
+        self.performContextAction = performContextAction
     }
 
     public var body: some View {
@@ -27,32 +56,29 @@ public struct HistoryPanelView: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($searchFocused)
 
-                if viewModel.aiActionsVisible {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let selected = viewModel.selectedItem, selected.type == .text {
-                            ForEach(Array(viewModel.aiActions.enumerated()), id: \.element.id) { index, action in
+                if viewModel.actionsVisible {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(actionMenuEntries.enumerated()), id: \.element.id) { index, entry in
                                 HStack {
-                                    Text(action.title)
+                                    Text(entry.title)
                                     Spacer()
-                                    if index == viewModel.selectedAIActionIndex { Text("\u{21A9}") }
+                                    if index == selectedActionIndex { Text("\u{21A9}") }
                                 }
                                 .font(.system(size: 13))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(index == viewModel.selectedAIActionIndex ? Color.accentColor.opacity(0.18) : Color.clear)
+                                .background(index == selectedActionIndex ? Color.accentColor.opacity(0.18) : Color.clear)
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    viewModel.selectedAIActionIndex = index
-                                    Task { await viewModel.runSelectedAIAction() }
+                                    selectedActionIndex = index
+                                    runSelectedMenuAction()
                                 }
                             }
-                        } else {
-                            Text("AI actions only support text in this version")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
                         }
                     }
+                    .frame(maxHeight: 220)
                     .padding(8)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.controlBackgroundColor)))
                 }
@@ -171,11 +197,11 @@ public struct HistoryPanelView: View {
             // Bottom: shortcuts hint
             HStack(spacing: 8) {
                 #if DEBUG
-                Text("Enter = copy  |  \u{2191}\u{2193} = select  |  \u{2318}D = favorite  |  \u{2318}P = pin image  |  Fn\u{232B} = delete  |  Esc = close  |  Tab/\u{2318}K = AI")
+                Text("Enter = copy  |  \u{2191}\u{2193} = select  |  \u{2318}D = favorite  |  \u{2318}\u{232B} = delete  |  Esc = close  |  Tab/\u{2318}K = actions")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 #else
-                Text("Enter = paste  |  \u{2191}\u{2193} = select  |  \u{2318}D = favorite  |  \u{2318}P = pin image  |  Fn\u{232B} = delete  |  Esc = close  |  Tab/\u{2318}K = AI")
+                Text("Enter = paste  |  \u{2191}\u{2193} = select  |  \u{2318}D = favorite  |  \u{2318}\u{232B} = delete  |  Esc = close  |  Tab/\u{2318}K = actions")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 #endif
@@ -189,6 +215,7 @@ public struct HistoryPanelView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .onAppear { searchFocused = true; installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
+        .onChange(of: viewModel.selectedItem?.id) { _ in selectedActionIndex = 0 }
     }
 
     private func installKeyMonitor() {
@@ -196,17 +223,20 @@ public struct HistoryPanelView: View {
             let keyCode = Int(event.keyCode)
             let modifiers = event.modifierFlags
 
-            // Tab / Cmd+K toggles AI actions
+            // Tab / Cmd+K toggles actions for the selected content type.
             if keyCode == kVK_Tab || (keyCode == kVK_ANSI_K && modifiers.contains(.command)) {
-                if viewModel.aiActionsVisible { viewModel.closeAIActions() }
-                else { viewModel.openAIActions() }
+                if viewModel.actionsVisible { viewModel.closeActions() }
+                else {
+                    selectedActionIndex = 0
+                    viewModel.openActions()
+                }
                 return nil
             }
 
             // Arrow keys: navigate AI actions when panel open, clipboard items otherwise
             if keyCode == kVK_UpArrow {
-                if viewModel.aiActionsVisible {
-                    viewModel.moveAIActionSelection(delta: -1)
+                if viewModel.actionsVisible {
+                    moveActionSelection(delta: -1)
                 } else {
                     viewModel.moveSelection(delta: -1)
                 }
@@ -214,8 +244,8 @@ public struct HistoryPanelView: View {
             }
 
             if keyCode == kVK_DownArrow {
-                if viewModel.aiActionsVisible {
-                    viewModel.moveAIActionSelection(delta: 1)
+                if viewModel.actionsVisible {
+                    moveActionSelection(delta: 1)
                 } else {
                     viewModel.moveSelection(delta: 1)
                 }
@@ -242,9 +272,9 @@ public struct HistoryPanelView: View {
                     return nil
                 }
 
-                // Enter runs selected AI action when AI panel is open
-                if viewModel.aiActionsVisible {
-                    Task { await viewModel.runSelectedAIAction() }
+                // Enter runs the selected contextual or AI action.
+                if viewModel.actionsVisible {
+                    runSelectedMenuAction()
                     return nil
                 }
 
@@ -270,8 +300,8 @@ public struct HistoryPanelView: View {
 
             // Escape: dismiss AI state first, then close panel
             if keyCode == kVK_Escape {
-                if viewModel.aiActionsVisible || viewModel.aiResult != nil || viewModel.aiError != nil {
-                    viewModel.closeAIActions()
+                if viewModel.actionsVisible || viewModel.aiResult != nil || viewModel.aiError != nil {
+                    viewModel.closeActions()
                     viewModel.clearAIOutput()
                 } else {
                     close()
@@ -291,7 +321,7 @@ public struct HistoryPanelView: View {
                 return nil
             }
 
-            if keyCode == kVK_ForwardDelete {
+            if keyCode == kVK_Delete && modifiers.contains(.command) {
                 try? viewModel.deleteSelected()
                 return nil
             }
@@ -312,6 +342,54 @@ public struct HistoryPanelView: View {
         case .text: return "T"
         case .image: return "I"
         case .file: return "F"
+        }
+    }
+
+    private var actionMenuEntries: [ActionMenuEntry] {
+        guard let item = viewModel.selectedItem else { return [] }
+        switch item.type {
+        case .text:
+            let clipboardEntries = [
+                ActionMenuEntry(id: "copy", title: "Copy", kind: .clipboard(.copy)),
+                ActionMenuEntry(id: "paste", title: "Paste", kind: .clipboard(.paste)),
+                ActionMenuEntry(id: "paste-plain", title: "Paste as Plain Text", kind: .clipboard(.pastePlainText)),
+                ActionMenuEntry(id: "edit-copy", title: "Edit and Copy…", kind: .clipboard(.editAndCopy))
+            ]
+            let aiEntries = viewModel.aiActions.enumerated().map { index, action in
+                ActionMenuEntry(id: "ai-\(action.id)", title: "AI · \(action.title)", kind: .ai(index))
+            }
+            return clipboardEntries + aiEntries
+        case .image:
+            return [
+                ActionMenuEntry(id: "pin", title: "Pin on Top", kind: .clipboard(.pinImage)),
+                ActionMenuEntry(id: "save-image", title: "Save Image As…", kind: .clipboard(.saveImage)),
+                ActionMenuEntry(id: "ocr", title: "Recognize Text (OCR)", kind: .clipboard(.recognizeText)),
+                ActionMenuEntry(id: "compress", title: "Compress as JPEG…", kind: .clipboard(.compressImage))
+            ]
+        case .file:
+            return [
+                ActionMenuEntry(id: "reveal", title: "Show in Finder", kind: .clipboard(.revealInFinder)),
+                ActionMenuEntry(id: "copy-path", title: "Copy Path", kind: .clipboard(.copyFilePaths)),
+                ActionMenuEntry(id: "copy-name", title: "Copy Filename", kind: .clipboard(.copyFileNames))
+            ]
+        }
+    }
+
+    private func moveActionSelection(delta: Int) {
+        let maxIndex = max(actionMenuEntries.count - 1, 0)
+        selectedActionIndex = min(max(selectedActionIndex + delta, 0), maxIndex)
+    }
+
+    private func runSelectedMenuAction() {
+        guard let item = viewModel.selectedItem,
+              actionMenuEntries.indices.contains(selectedActionIndex) else { return }
+        switch actionMenuEntries[selectedActionIndex].kind {
+        case .clipboard(let action):
+            viewModel.closeActions()
+            performContextAction(action, item)
+        case .ai(let index):
+            viewModel.selectedAIActionIndex = index
+            Task { await viewModel.runSelectedAIAction() }
         }
     }
 }

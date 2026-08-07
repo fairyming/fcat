@@ -22,7 +22,7 @@ public final class HistoryPanelViewModel: ObservableObject {
         }
     }
     @Published public private(set) var selectedIndex: Int = 0
-    @Published public var aiActionsVisible: Bool = false
+    @Published public var actionsVisible: Bool = false
     @Published public var selectedAIActionIndex: Int = 0
     @Published public var aiLoading: Bool = false
     @Published public var aiResult: String?
@@ -84,19 +84,13 @@ public final class HistoryPanelViewModel: ObservableObject {
         try pasteboard.write(visibleItems[selectedIndex])
     }
 
-    public func openAIActions() {
-        guard let selectedItem, selectedItem.type == .text else {
-            aiActionsVisible = true
-            aiError = AIServiceError.unsupportedItem.localizedDescription
-            aiResult = nil
-            return
-        }
-        aiActionsVisible = true
+    public func openActions() {
+        actionsVisible = true
         aiError = nil
     }
 
-    public func closeAIActions() {
-        aiActionsVisible = false
+    public func closeActions() {
+        actionsVisible = false
     }
 
     public func moveAIActionSelection(delta: Int) {

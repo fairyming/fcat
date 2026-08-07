@@ -62,7 +62,7 @@ struct FCatCoreTestRunner {
         try awaitTestAIServiceAnthropicDefaultBaseURL()
         try awaitTestAIServiceAnthropicInvalidResponse()
         try testHistoryViewModelCopyAIResultWritesTextToPasteboard()
-        try testHistoryViewModelShowsUnsupportedMessageForImageAIAction()
+        try testHistoryViewModelOpensActionMenuForImage()
         try awaitTestHistoryViewModelRunsAIAction()
         try testHistoryViewModelFormatsJSONLocally()
         try testHistoryViewModelClearsAIResultWhenSelectionChanges()
@@ -642,10 +642,11 @@ struct FCatCoreTestRunner {
         try expect(pasteboard.writtenText == "AI output", "AI result written as text")
     }
 
-    static func testHistoryViewModelShowsUnsupportedMessageForImageAIAction() throws {
+    static func testHistoryViewModelOpensActionMenuForImage() throws {
         let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "image", type: .image)]), pasteboard: WritableFakePasteboard())
-        viewModel.openAIActions()
-        try expect(viewModel.aiError == "AI actions only support text in this version.", "unsupported AI action message")
+        viewModel.openActions()
+        try expect(viewModel.actionsVisible, "image action menu visible")
+        try expect(viewModel.aiError == nil, "image action menu has no AI error")
     }
 
     static func awaitTestHistoryViewModelRunsAIAction() throws {
