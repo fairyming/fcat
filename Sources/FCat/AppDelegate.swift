@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var historyWindow: NSWindow?
     private var settingsWindow: NSWindow?
+    private var pinnedImageWindows: [UUID: PinnedImageWindowController] = [:]
     private var monitor: ClipboardMonitor?
     private let hotKeyManager = GlobalHotKeyManager()
     private var store: ClipboardStore?
@@ -112,7 +113,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let viewModel = HistoryPanelViewModel(store: store, pasteboard: pasteboard, aiService: aiService, aiSettingsStore: aiSettingsStore)
-        let view = HistoryPanelView(viewModel: viewModel) { [weak self] in self?.historyWindow?.orderOut(nil) }
+        let view = HistoryPanelView(
+            viewModel: viewModel,
+            close: { [weak self] in self?.historyWindow?.orderOut(nil) },
+            pinImage: { [weak self] item in self?.pinImage(item) }
+        )
         let window = BorderlessWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 520), styleMask: .borderless, backing: .buffered, defer: false)
         window.contentView = NSHostingView(rootView: view)
         window.backgroundColor = .clear
@@ -158,6 +163,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func register(_ hotKey: HotKey) throws {
         try hotKeyManager.register(hotKey) { [weak self] in self?.openHistory() }
+    }
+
+    private func pinImage(_ item: ClipboardItem) {
+        guard item.type == .image,
+              let path = item.assetPath,
+              let controller = PinnedImageWindowController(imagePath: path, title: item.previewTitle) else {
+            showError("The selected image could not be opened.")
+            return
+        }
+
+        controller.onClose = { [weak self] id in
+            self?.pinnedImageWindows.removeValue(forKey: id)
+        }
+        pinnedImageWindows[controller.id] = controller
+        controller.showWindow(nil)
+        controller.window?.orderFrontRegardless()
+        historyWindow?.orderOut(nil)
     }
 
     private func appSupportDirectory() throws -> URL {

@@ -7,10 +7,16 @@ public struct HistoryPanelView: View {
     @FocusState private var searchFocused: Bool
     @State private var keyMonitor: Any?
     private let close: () -> Void
+    private let pinImage: (ClipboardItem) -> Void
 
-    public init(viewModel: HistoryPanelViewModel, close: @escaping () -> Void) {
+    public init(
+        viewModel: HistoryPanelViewModel,
+        close: @escaping () -> Void,
+        pinImage: @escaping (ClipboardItem) -> Void = { _ in }
+    ) {
         self.viewModel = viewModel
         self.close = close
+        self.pinImage = pinImage
     }
 
     public var body: some View {
@@ -120,6 +126,10 @@ public struct HistoryPanelView: View {
                                                 .resizable()
                                                 .aspectRatio(contentMode: .fit)
                                                 .frame(maxHeight: .infinity)
+                                            Button("Pin on Top") {
+                                                pinImage(selectedItem)
+                                            }
+                                            .keyboardShortcut("p", modifiers: .command)
                                         } else {
                                             Text("Image not found")
                                                 .foregroundStyle(.secondary)
@@ -161,11 +171,11 @@ public struct HistoryPanelView: View {
             // Bottom: shortcuts hint
             HStack(spacing: 8) {
                 #if DEBUG
-                Text("Enter = copy  |  \u{2191}\u{2193} = select  |  \u{2318}D = favorite  |  Fn\u{232B} = delete  |  Esc = close  |  Tab/\u{2318}K = AI")
+                Text("Enter = copy  |  \u{2191}\u{2193} = select  |  \u{2318}D = favorite  |  \u{2318}P = pin image  |  Fn\u{232B} = delete  |  Esc = close  |  Tab/\u{2318}K = AI")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 #else
-                Text("Enter = paste  |  \u{2191}\u{2193} = select  |  \u{2318}D = favorite  |  Fn\u{232B} = delete  |  Esc = close  |  Tab/\u{2318}K = AI")
+                Text("Enter = paste  |  \u{2191}\u{2193} = select  |  \u{2318}D = favorite  |  \u{2318}P = pin image  |  Fn\u{232B} = delete  |  Esc = close  |  Tab/\u{2318}K = AI")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 #endif
@@ -271,6 +281,13 @@ public struct HistoryPanelView: View {
 
             if keyCode == kVK_ANSI_D && modifiers.contains(.command) {
                 try? viewModel.toggleFavoriteSelected()
+                return nil
+            }
+
+            if keyCode == kVK_ANSI_P && modifiers.contains(.command),
+               let item = viewModel.selectedItem,
+               item.type == .image {
+                pinImage(item)
                 return nil
             }
 
