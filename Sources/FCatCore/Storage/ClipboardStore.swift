@@ -25,7 +25,7 @@ public final class ClipboardStore {
             try database.execute(
                 """
                 UPDATE clipboard_items
-                SET type = ?, preview_title = ?, content_text = ?, asset_path = ?, source_app_name = ?, last_used_at = ?, is_favorite = ?
+                SET type = ?, preview_title = ?, content_text = ?, asset_path = ?, source_app_name = COALESCE(source_app_name, ?), last_used_at = ?, is_favorite = ?
                 WHERE id = ?
                 """,
                 bindings: [

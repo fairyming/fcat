@@ -13,6 +13,7 @@ public final class ClipboardMonitor {
     private let sink: ClipboardItemSink
     private let imageSaver: (Data, UUID) throws -> String
     private let now: () -> Date
+    private let sourceAppNameProvider: () -> String?
     private var lastChangeCount: Int?
     private var timer: Timer?
 
@@ -20,12 +21,14 @@ public final class ClipboardMonitor {
         pasteboard: PasteboardClient,
         sink: ClipboardItemSink,
         imageSaver: @escaping (Data, UUID) throws -> String = { _, _ in throw ClipboardMonitorError.imageSaverMissing },
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        sourceAppNameProvider: @escaping () -> String? = { nil }
     ) {
         self.pasteboard = pasteboard
         self.sink = sink
         self.imageSaver = imageSaver
         self.now = now
+        self.sourceAppNameProvider = sourceAppNameProvider
     }
 
     public func start(interval: TimeInterval = 0.5) {
@@ -50,16 +53,19 @@ public final class ClipboardMonitor {
     private func makeItem(from snapshot: PasteboardSnapshot) throws -> ClipboardItem {
         let id = UUID()
         let date = now()
+        let sourceAppName = sourceAppNameProvider()?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty
         switch snapshot {
         case .text(let text):
-            return ClipboardItem(id: id, type: .text, previewTitle: preview(text), contentText: text, assetPath: nil, sourceAppName: nil, createdAt: date, lastUsedAt: date, isFavorite: false, contentHash: ContentHasher.hashText(text))
+            return ClipboardItem(id: id, type: .text, previewTitle: preview(text), contentText: text, assetPath: nil, sourceAppName: sourceAppName, createdAt: date, lastUsedAt: date, isFavorite: false, contentHash: ContentHasher.hashText(text))
         case .files(let paths):
             let names = paths.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ")
             let content = paths.joined(separator: "\n")
-            return ClipboardItem(id: id, type: .file, previewTitle: names, contentText: content, assetPath: nil, sourceAppName: nil, createdAt: date, lastUsedAt: date, isFavorite: false, contentHash: ContentHasher.hashFilePaths(paths))
+            return ClipboardItem(id: id, type: .file, previewTitle: names, contentText: content, assetPath: nil, sourceAppName: sourceAppName, createdAt: date, lastUsedAt: date, isFavorite: false, contentHash: ContentHasher.hashFilePaths(paths))
         case .imagePNG(let data):
             let path = try imageSaver(data, id)
-            return ClipboardItem(id: id, type: .image, previewTitle: "Image", contentText: nil, assetPath: path, sourceAppName: nil, createdAt: date, lastUsedAt: date, isFavorite: false, contentHash: ContentHasher.hashImagePNGData(data))
+            return ClipboardItem(id: id, type: .image, previewTitle: "Image", contentText: nil, assetPath: path, sourceAppName: sourceAppName, createdAt: date, lastUsedAt: date, isFavorite: false, contentHash: ContentHasher.hashImagePNGData(data))
         }
     }
 
@@ -67,6 +73,10 @@ public final class ClipboardMonitor {
         let singleLine = text.replacingOccurrences(of: "\n", with: " ")
         return String(singleLine.prefix(80))
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 public enum ClipboardMonitorError: Error, Equatable {

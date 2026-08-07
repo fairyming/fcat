@@ -21,12 +21,14 @@ struct FCatCoreTestRunner {
         try testTitleMatchBeatsBodyMatch()
         try testInsertedItemPersistsAcrossStoreInstances()
         try testDuplicateHashUpdatesExistingItemInsteadOfInserting()
+        try testDuplicateHashPreservesOriginalSourceApplication()
         try testNonFavoriteHistoryIsCappedAtFiveHundred()
         try testFavoritesAreNotRemovedByHistoryCap()
         try testNonFavoriteImageCountIsCappedAtOneHundred()
         try testNonFavoriteImageBytesAreCapped()
         try testFavoriteImagesAreNotRemovedByImageCaps()
         try testTextChangeCreatesTextItem()
+        try testClipboardMonitorRecordsSourceApplication()
         try testWhitespaceOnlyTextDoesNotCreateTextItem()
         try testSameChangeCountDoesNotCreateItemTwice()
         try testFilePathsCreateFileItem()
@@ -194,6 +196,16 @@ struct FCatCoreTestRunner {
         try expect(all[0].previewTitle == "Updated", "duplicate hash update")
     }
 
+    static func testDuplicateHashPreservesOriginalSourceApplication() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try makeStore(directory: directory)
+        try store.upsert(makeItem(title: "First", hash: "same-source", sourceAppName: "Safari"))
+        try store.upsert(makeItem(title: "Second", hash: "same-source", sourceAppName: "FCat"))
+        let sourceAppName = try store.fetchAll().first?.sourceAppName
+        try expect(sourceAppName == "Safari", "duplicate preserves original source application")
+    }
+
     static func testNonFavoriteHistoryIsCappedAtFiveHundred() throws {
         let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -266,6 +278,18 @@ struct FCatCoreTestRunner {
         try expect(sink.items[0].type == .text, "text monitor type")
         try expect(sink.items[0].previewTitle == "hello world", "text monitor preview")
         try expect(sink.items[0].contentText == "hello world", "text monitor content")
+    }
+
+    static func testClipboardMonitorRecordsSourceApplication() throws {
+        let pasteboard = FakePasteboard(changeCount: 1, snapshot: .text("from browser"))
+        let sink = CapturingSink()
+        let monitor = ClipboardMonitor(
+            pasteboard: pasteboard,
+            sink: sink,
+            sourceAppNameProvider: { "Safari" }
+        )
+        try monitor.pollOnce()
+        try expect(sink.items.first?.sourceAppName == "Safari", "clipboard source application")
     }
 
     static func testWhitespaceOnlyTextDoesNotCreateTextItem() throws {
@@ -700,7 +724,7 @@ struct FCatCoreTestRunner {
         return directory
     }
 
-    static func makeItem(title: String, type: ClipboardContentType = .text, text: String? = nil, content: String? = nil, favorite: Bool = false, hash: String? = nil, assetPath: String? = nil, lastUsedOffset: TimeInterval = 0) -> ClipboardItem {
+    static func makeItem(title: String, type: ClipboardContentType = .text, text: String? = nil, content: String? = nil, favorite: Bool = false, hash: String? = nil, assetPath: String? = nil, lastUsedOffset: TimeInterval = 0, sourceAppName: String? = nil) -> ClipboardItem {
         let baseDate = Date(timeIntervalSince1970: 1_700_000_000)
         return ClipboardItem(
             id: UUID(),
@@ -708,7 +732,7 @@ struct FCatCoreTestRunner {
             previewTitle: title,
             contentText: content ?? text ?? title,
             assetPath: assetPath,
-            sourceAppName: nil,
+            sourceAppName: sourceAppName,
             createdAt: baseDate.addingTimeInterval(lastUsedOffset),
             lastUsedAt: baseDate.addingTimeInterval(lastUsedOffset),
             isFavorite: favorite,

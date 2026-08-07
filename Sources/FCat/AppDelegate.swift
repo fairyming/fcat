@@ -64,7 +64,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let pasteboard = SystemPasteboardClient()
             self.store = store
             self.pasteboard = pasteboard
-            monitor = ClipboardMonitor(pasteboard: pasteboard, sink: store, imageSaver: assetStore.savePNGData)
+            monitor = ClipboardMonitor(
+                pasteboard: pasteboard,
+                sink: store,
+                imageSaver: assetStore.savePNGData,
+                sourceAppNameProvider: {
+                    guard let app = NSWorkspace.shared.frontmostApplication,
+                          app.bundleIdentifier != Bundle.main.bundleIdentifier else { return nil }
+                    return app.localizedName
+                }
+            )
             monitor?.start()
             createStatusItem()
             if let hotKey = settingsViewModel.hotKey {
