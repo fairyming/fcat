@@ -1,40 +1,51 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- Background circle -->
+  <!-- Keep the original warm cream and charcoal palette. -->
   <circle cx="512" cy="512" r="460" fill="#FFF8F0" stroke="#3D3D3D" stroke-width="20"/>
 
-  <!-- Left ear outline -->
-  <path d="M 230 280 L 170 80 L 370 230" fill="none" stroke="#3D3D3D" stroke-width="18" stroke-linejoin="round" stroke-linecap="round"/>
-  <!-- Left ear inner line -->
-  <path d="M 255 250 L 200 110 L 350 225" fill="none" stroke="#3D3D3D" stroke-width="10" stroke-linejoin="round" stroke-linecap="round" opacity="0.35"/>
+  <g transform="translate(0 30)">
+  <!-- Soft, rounded ears behind the head. -->
+  <path d="M286 342 Q208 266 205 135 Q204 107 229 120 Q350 180 395 264 Z"
+        fill="#FFF8F0" stroke="#3D3D3D" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M738 342 Q816 266 819 135 Q820 107 795 120 Q674 180 629 264 Z"
+        fill="#FFF8F0" stroke="#3D3D3D" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M259 251 Q238 201 239 165 Q303 200 344 249 Z" fill="#3D3D3D" opacity="0.15"/>
+  <path d="M765 251 Q786 201 785 165 Q721 200 680 249 Z" fill="#3D3D3D" opacity="0.15"/>
 
-  <!-- Right ear outline -->
-  <path d="M 794 280 L 854 80 L 654 230" fill="none" stroke="#3D3D3D" stroke-width="18" stroke-linejoin="round" stroke-linecap="round"/>
-  <!-- Right ear inner line -->
-  <path d="M 769 250 L 824 110 L 674 225" fill="none" stroke="#3D3D3D" stroke-width="10" stroke-linejoin="round" stroke-linecap="round" opacity="0.35"/>
+  <!-- Chubby kitten head. -->
+  <path d="M512 226 C322 226 214 348 224 535 C232 691 337 785 512 785 C687 785 792 691 800 535 C810 348 702 226 512 226 Z"
+        fill="#FFF8F0" stroke="#3D3D3D" stroke-width="22" stroke-linejoin="round"/>
 
-  <!-- Head outline -->
-  <circle cx="512" cy="530" r="280" fill="none" stroke="#3D3D3D" stroke-width="18"/>
+  <!-- Small forehead tuft. -->
+  <path d="M454 250 Q476 294 512 253 Q548 294 570 250"
+        fill="none" stroke="#3D3D3D" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- Eyes - filled dots -->
-  <circle cx="400" cy="500" r="22" fill="#3D3D3D"/>
-  <circle cx="624" cy="500" r="22" fill="#3D3D3D"/>
-  <!-- Eye highlights -->
-  <circle cx="410" cy="492" r="6" fill="#FFF8F0"/>
-  <circle cx="634" cy="492" r="6" fill="#FFF8F0"/>
+  <!-- Large friendly eyes. -->
+  <ellipse cx="389" cy="480" rx="49" ry="58" fill="#3D3D3D"/>
+  <ellipse cx="635" cy="480" rx="49" ry="58" fill="#3D3D3D"/>
+  <circle cx="373" cy="459" r="16" fill="#FFF8F0"/>
+  <circle cx="619" cy="459" r="16" fill="#FFF8F0"/>
+  <circle cx="404" cy="506" r="8" fill="#FFF8F0" opacity="0.85"/>
+  <circle cx="650" cy="506" r="8" fill="#FFF8F0" opacity="0.85"/>
 
-  <!-- Nose outline -->
-  <path d="M 512 555 L 498 575 L 526 575 Z" fill="none" stroke="#3D3D3D" stroke-width="8" stroke-linejoin="round"/>
+  <!-- Cheeks. -->
+  <ellipse cx="325" cy="574" rx="55" ry="25" fill="#3D3D3D" opacity="0.12"/>
+  <ellipse cx="699" cy="574" rx="55" ry="25" fill="#3D3D3D" opacity="0.12"/>
 
-  <!-- Mouth -->
-  <path d="M 498 582 Q 512 600 526 582" fill="none" stroke="#3D3D3D" stroke-width="8" stroke-linecap="round"/>
+  <!-- Tiny nose and smiling mouth. -->
+  <path d="M488 551 Q512 535 536 551 Q532 578 512 581 Q492 578 488 551 Z" fill="#3D3D3D"/>
+  <path d="M512 579 C508 616 463 620 454 588 M512 579 C516 616 561 620 570 588"
+        fill="none" stroke="#3D3D3D" stroke-width="12" stroke-linecap="round"/>
 
-  <!-- Whiskers left -->
-  <line x1="380" y1="560" x2="210" y2="530" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
-  <line x1="380" y1="575" x2="200" y2="575" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
-  <line x1="380" y1="590" x2="210" y2="625" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
+  <!-- Short whiskers stay readable at menu-bar sizes. -->
+  <path d="M356 557 L245 530 M352 590 L237 596 M668 557 L779 530 M672 590 L787 596"
+        fill="none" stroke="#3D3D3D" stroke-width="10" stroke-linecap="round"/>
 
-  <!-- Whiskers right -->
-  <line x1="644" y1="560" x2="814" y2="530" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
-  <line x1="644" y1="575" x2="824" y2="575" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
-  <line x1="644" y1="590" x2="814" y2="625" stroke="#3D3D3D" stroke-width="6" stroke-linecap="round"/>
+  <!-- Two little paws peeking over the bottom edge. -->
+  <path d="M344 730 C343 673 383 645 430 666 C469 684 471 742 438 775"
+        fill="#FFF8F0" stroke="#3D3D3D" stroke-width="20" stroke-linecap="round"/>
+  <path d="M680 730 C681 673 641 645 594 666 C555 684 553 742 586 775"
+        fill="#FFF8F0" stroke="#3D3D3D" stroke-width="20" stroke-linecap="round"/>
+  <path d="M386 704 L383 733 M421 704 L418 733 M638 704 L641 733 M603 704 L606 733"
+        stroke="#3D3D3D" stroke-width="9" stroke-linecap="round"/>
+  </g>
 </svg>

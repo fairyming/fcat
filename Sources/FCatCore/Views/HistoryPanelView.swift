@@ -123,7 +123,7 @@ public struct HistoryPanelView: View {
                             Text(item.isFavorite ? "\u{2605}" : "\u{2606}")
                                 .foregroundStyle(item.isFavorite ? .yellow : .secondary)
                                 .font(.system(size: 14))
-                                .onTapGesture { try? viewModel.toggleFavoriteSelected() }
+                                .onTapGesture { try? viewModel.toggleFavorite(id: item.id) }
                         }
                         .padding(.vertical, 3)
                         .padding(.horizontal, 6)
@@ -242,10 +242,25 @@ public struct HistoryPanelView: View {
     }
 
     private func installKeyMonitor() {
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak historyWindow = NSApp.keyWindow] event in
-            guard let historyWindow, event.window === historyWindow else { return event }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Do not capture NSApp.keyWindow here. When the panel is opened from
+            // another app (especially a full-screen app), SwiftUI can appear
+            // before the panel has become key. Capturing it at that point leaves
+            // the monitor permanently associated with nil or the previous window.
+            guard let eventWindow = event.window,
+                  eventWindow === NSApp.keyWindow,
+                  eventWindow.identifier?.rawValue == "FCatHistoryWindow" else { return event }
             let keyCode = Int(event.keyCode)
             let modifiers = event.modifierFlags
+
+            // While an input method is composing marked text in the search
+            // field, Return confirms the raw/selected composition and arrow
+            // keys navigate its candidates. Let the field editor receive those
+            // events before treating them as clipboard shortcuts.
+            if let fieldEditor = eventWindow.firstResponder as? NSTextView,
+               fieldEditor.hasMarkedText() {
+                return event
+            }
 
             if modifiers.contains(.control),
                let category = categoryShortcut(for: keyCode) {

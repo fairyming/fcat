@@ -152,15 +152,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
         let window = BorderlessWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 520), styleMask: .borderless, backing: .buffered, defer: false)
+        window.identifier = NSUserInterfaceItemIdentifier("FCatHistoryWindow")
         window.contentView = NSHostingView(rootView: view)
         window.backgroundColor = .clear
         window.isOpaque = false
         window.isMovableByWindowBackground = true
         window.hasShadow = true
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        positionHistoryWindow(window)
         historyWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func positionHistoryWindow(_ window: NSWindow) {
+        // Put the panel on the display where the pointer (and normally the
+        // invoking app) currently is, including when that display is full-screen.
+        let pointer = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(pointer, $0.frame, false) }) else {
+            window.center()
+            return
+        }
+        let visibleFrame = screen.visibleFrame
+        let origin = NSPoint(
+            x: visibleFrame.midX - window.frame.width / 2,
+            y: visibleFrame.midY - window.frame.height / 2
+        )
+        window.setFrameOrigin(origin)
     }
 
     @objc private func openSettings() {

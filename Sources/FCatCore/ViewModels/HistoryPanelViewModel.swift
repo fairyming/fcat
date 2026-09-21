@@ -178,7 +178,11 @@ public final class HistoryPanelViewModel: ObservableObject {
 
     public func toggleFavoriteSelected() throws {
         guard visibleItems.indices.contains(selectedIndex) else { return }
-        let id = visibleItems[selectedIndex].id
+        try toggleFavorite(id: visibleItems[selectedIndex].id)
+    }
+
+    public func toggleFavorite(id: UUID) throws {
+        guard visibleItems.contains(where: { $0.id == id }) else { return }
         try store.toggleFavorite(id: id)
         reloadItems(selecting: id)
     }

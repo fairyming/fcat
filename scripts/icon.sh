@@ -52,7 +52,7 @@ fi
 rm -rf "$ICONSET_DIR"
 mkdir -p "$ICONSET_DIR"
 
-BASE_PNG="$ICONSET_DIR/icon_1024x1024.png"
+BASE_PNG="$PROJECT_DIR/.build/FCat-icon-base.png"
 
 if [ "$CONVERT_CMD" = "rsvg-convert" ]; then
     rsvg-convert -w 1024 -h 1024 "$SVG_PATH" > "$BASE_PNG"
@@ -76,8 +76,35 @@ sips -z 512 512   "$BASE_PNG" --out "$ICONSET_DIR/icon_256x256@2x.png"    -s for
 sips -z 512 512   "$BASE_PNG" --out "$ICONSET_DIR/icon_512x512.png"       -s format png &>/dev/null
 sips -z 1024 1024 "$BASE_PNG" --out "$ICONSET_DIR/icon_512x512@2x.png"    -s format png &>/dev/null
 
-# 4. 使用 iconutil 生成 .icns
-iconutil -c icns "$ICONSET_DIR" -o "$ICNS_PATH"
+# 4. 使用 iconutil 生成 .icns。部分新版 Command Line Tools 的
+# iconutil 无法重新打包其自己解出的 iconset，因此提供标准 ICNS
+# PNG chunk 作为兼容回退。
+if ! iconutil -c icns "$ICONSET_DIR" -o "$ICNS_PATH"; then
+    python3 - "$ICONSET_DIR" "$ICNS_PATH" <<'PY'
+import pathlib
+import struct
+import sys
+
+iconset = pathlib.Path(sys.argv[1])
+output = pathlib.Path(sys.argv[2])
+representations = [
+    (b"icp4", "icon_16x16.png"),
+    (b"icp5", "icon_32x32.png"),
+    (b"icp6", "icon_32x32@2x.png"),
+    (b"ic07", "icon_128x128.png"),
+    (b"ic08", "icon_256x256.png"),
+    (b"ic09", "icon_512x512.png"),
+    (b"ic10", "icon_512x512@2x.png"),
+]
+chunks = []
+for kind, filename in representations:
+    payload = (iconset / filename).read_bytes()
+    chunks.append(kind + struct.pack(">I", len(payload) + 8) + payload)
+body = b"".join(chunks)
+output.write_bytes(b"icns" + struct.pack(">I", len(body) + 8) + body)
+PY
+fi
+rm -f "$BASE_PNG"
 
 echo "图标已生成：$ICNS_PATH"
 ls -lh "$ICNS_PATH"

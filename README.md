@@ -9,7 +9,7 @@
 - 记录剪贴板内容的来源应用，并在详情中显示
 - SQLite 持久化存储，重启后历史不丢失
 - 分类过滤：全部 / 文本 / 图片 / 文件 / 收藏，可用 `Control+1…5` 快速切换
-- 模糊搜索，支持标题、内容和文件名匹配
+- 连续文本搜索，支持标题、内容和文件名匹配
 - 收藏功能：收藏项永久保留，不受数量限制
 - 图片置顶：选中图片后点击 “Pin on Top” 或按 `⌘P`，可将图片悬浮在当前桌面最上层
 - 按 `Tab` 打开内容操作面板：文本编辑、图片保存/OCR/压缩、文件定位与路径复制
@@ -83,7 +83,7 @@ Sources/
   FCatCore/
     Models/       - ClipboardItem、ClipboardCategory、HotKey
     Hashing/      - ContentHasher（SHA-256 文本、文件、PNG 哈希）
-    Search/       - FuzzyMatcher、SearchService
+    Search/       - TextMatcher、SearchService
     Storage/      - SQLiteDatabase、ImageAssetStore、ClipboardStore
     Pasteboard/   - PasteboardClient、ClipboardMonitor
     HotKeys/      - GlobalHotKeyManager（Carbon API）

@@ -13,9 +13,11 @@ struct FCatCoreTestRunner {
         try testImageHashUsesData()
         try testClipboardCategoryIDsMatchRawValues()
         try testEmptyQueryMatchesWithZeroScore()
-        try testContiguousMatchScoresHigherThanSpreadMatch()
+        try testSearchRequiresContiguousMatch()
         try testMissingCharactersDoNotMatch()
         try testCaseInsensitiveMatch()
+        try testRepeatedCharacterQueryRequiresContiguousMatch()
+        try testSearchDoesNotAssembleRepeatedCharactersAcrossPathSegments()
         try testSearchFiltersFavoritesCategory()
         try testSearchFiltersImagesCategory()
         try testSearchFiltersTextsCategory()
@@ -41,6 +43,7 @@ struct FCatCoreTestRunner {
         try testHistoryViewModelPublishesOneChangeForCategoryFilter()
         try testHistoryViewModelMoveSelectionClampsToVisibleItems()
         try testHistoryViewModelCopySelectedWritesToPasteboard()
+        try testHistoryViewModelFavoritesClickedItem()
         try testAIActionsContainExpectedBuiltIns()
         try testAIActionSupportsOnlyTextItems()
         try testAIActionPromptUsesInputAndDefaultLanguage()
@@ -131,21 +134,32 @@ struct FCatCoreTestRunner {
     }
 
     static func testEmptyQueryMatchesWithZeroScore() throws {
-        try expect(FuzzyMatcher.score(query: "", candidate: "hello") == 0, "empty fuzzy query")
+        try expect(TextMatcher.score(query: "", candidate: "hello") == 0, "empty search query")
     }
 
-    static func testContiguousMatchScoresHigherThanSpreadMatch() throws {
-        let contiguous = FuzzyMatcher.score(query: "cat", candidate: "clipboard cat") ?? -1
-        let spread = FuzzyMatcher.score(query: "cat", candidate: "c-l-i-p-b-o-a-r-d a t") ?? -1
-        try expect(contiguous > spread, "contiguous fuzzy score")
+    static func testSearchRequiresContiguousMatch() throws {
+        try expect(TextMatcher.score(query: "cat", candidate: "clipboard cat") != nil, "contiguous search match")
+        try expect(TextMatcher.score(query: "cat", candidate: "c-l-i-p-b-o-a-r-d a t") == nil, "spread characters do not match")
     }
 
     static func testMissingCharactersDoNotMatch() throws {
-        try expect(FuzzyMatcher.score(query: "xyz", candidate: "clipboard") == nil, "missing fuzzy chars")
+        try expect(TextMatcher.score(query: "xyz", candidate: "clipboard") == nil, "missing search text")
     }
 
     static func testCaseInsensitiveMatch() throws {
-        try expect(FuzzyMatcher.score(query: "clip", candidate: "Clipboard History") != nil, "case insensitive fuzzy match")
+        try expect(TextMatcher.score(query: "clip", candidate: "Clipboard History") != nil, "case insensitive search match")
+    }
+
+    static func testRepeatedCharacterQueryRequiresContiguousMatch() throws {
+        try expect(TextMatcher.score(query: "aaa", candidate: "/data/agent/session") == nil, "repeated characters do not cross path segments")
+        try expect(TextMatcher.score(query: "aaa", candidate: "contains-aaa-here") != nil, "contiguous repeated characters match")
+    }
+
+    static func testSearchDoesNotAssembleRepeatedCharactersAcrossPathSegments() throws {
+        let path = "/data/agent/session/ai-answer-session-test.json"
+        let item = makeItem(title: "ai-answer-session-test.json", type: .file, content: path)
+        let results = SearchService.search(items: [item], query: "aaa", category: .all)
+        try expect(results.isEmpty, "repeated query does not produce unrelated path result")
     }
 
     static func testSearchFiltersFavoritesCategory() throws {
@@ -391,6 +405,19 @@ struct FCatCoreTestRunner {
         let viewModel = HistoryPanelViewModel(store: InMemoryHistoryStore(items: [makeItem(title: "one")]), pasteboard: pasteboard)
         try viewModel.copySelected()
         try expect(pasteboard.written.first?.previewTitle == "one", "copy selected writes pasteboard")
+    }
+
+    static func testHistoryViewModelFavoritesClickedItem() throws {
+        let first = makeItem(title: "one")
+        let second = makeItem(title: "two")
+        let store = CountingHistoryStore(items: [first, second])
+        let viewModel = HistoryPanelViewModel(store: store, pasteboard: WritableFakePasteboard())
+
+        try viewModel.toggleFavorite(id: second.id)
+
+        try expect(store.items.first(where: { $0.id == second.id })?.isFavorite == true, "clicked item is favorited")
+        try expect(store.items.first(where: { $0.id == first.id })?.isFavorite == false, "first item is unchanged")
+        try expect(viewModel.selectedItem?.id == second.id, "clicked item remains selected after favorite reorder")
     }
 
     static func testAIActionsContainExpectedBuiltIns() throws {

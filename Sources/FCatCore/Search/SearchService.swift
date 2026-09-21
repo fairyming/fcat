@@ -27,8 +27,8 @@ public enum SearchService {
         }
 
         return filtered.compactMap { item -> (ClipboardItem, Int)? in
-            let titleScore = FuzzyMatcher.score(query: trimmedQuery, candidate: item.previewTitle).map { $0 + 1_000 }
-            let bodyScore = item.contentText.flatMap { FuzzyMatcher.score(query: trimmedQuery, candidate: $0) }
+            let titleScore = TextMatcher.score(query: trimmedQuery, candidate: item.previewTitle).map { $0 + 1_000 }
+            let bodyScore = item.contentText.flatMap { TextMatcher.score(query: trimmedQuery, candidate: $0) }
             guard let score = [titleScore, bodyScore].compactMap({ $0 }).max() else { return nil }
             return (item, score)
         }
