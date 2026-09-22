@@ -26,7 +26,7 @@ final class KeyboardCommitTextView: NSTextView {
     }
 }
 
-final class BorderlessWindow: NSWindow {
+final class BorderlessWindow: NSPanel {
     override var canBecomeKey: Bool { true }
     override func resignKey() {
         super.resignKey()
@@ -138,32 +138,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func doOpenHistory() {
         guard let store, let pasteboard else { return }
         if let historyWindow, historyWindow.isVisible {
-            historyWindow.orderOut(nil)
+            dismissHistory()
             return
         }
 
         let viewModel = HistoryPanelViewModel(store: store, pasteboard: pasteboard, aiService: aiService, aiSettingsStore: aiSettingsStore)
         let view = HistoryPanelView(
             viewModel: viewModel,
-            close: { [weak self] in self?.historyWindow?.orderOut(nil) },
+            close: { [weak self] in self?.dismissHistory() },
             pinImage: { [weak self] item in self?.pinImage(item) },
             performContextAction: { [weak self] action, item in
                 self?.performContextAction(action, on: item)
             }
         )
-        let window = BorderlessWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 520), styleMask: .borderless, backing: .buffered, defer: false)
+        let window = BorderlessWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 520),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
         window.identifier = NSUserInterfaceItemIdentifier("FCatHistoryWindow")
         window.contentView = NSHostingView(rootView: view)
         window.backgroundColor = .clear
         window.isOpaque = false
         window.isMovableByWindowBackground = true
         window.hasShadow = true
+        window.isFloatingPanel = true
+        window.hidesOnDeactivate = false
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         positionHistoryWindow(window)
         historyWindow = window
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        focusHistoryWindow(window)
+    }
+
+    private func focusHistoryWindow(_ window: NSWindow) {
+        // A non-activating panel can become key without making FCat the active
+        // application. This is essential while the foreground application owns
+        // Secure Event Input (for example an SSH or browser password field).
+        window.orderFrontRegardless()
+        window.makeKey()
+    }
+
+    private func dismissHistory() {
+        historyWindow?.orderOut(nil)
     }
 
     private func positionHistoryWindow(_ window: NSWindow) {
