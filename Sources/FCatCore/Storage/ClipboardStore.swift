@@ -25,7 +25,7 @@ public final class ClipboardStore {
             try database.execute(
                 """
                 UPDATE clipboard_items
-                SET type = ?, preview_title = ?, content_text = ?, asset_path = ?, source_app_name = COALESCE(source_app_name, ?), last_used_at = ?, is_favorite = ?
+                SET type = ?, preview_title = ?, content_text = ?, asset_path = ?, source_app_name = COALESCE(source_app_name, ?), last_used_at = ?
                 WHERE id = ?
                 """,
                 bindings: [
@@ -35,7 +35,6 @@ public final class ClipboardStore {
                     item.assetPath.map(SQLiteBinding.text) ?? .null,
                     item.sourceAppName.map(SQLiteBinding.text) ?? .null,
                     .int(Int64(item.lastUsedAt.timeIntervalSince1970)),
-                    .int(item.isFavorite ? 1 : 0),
                     .text(existing.id.uuidString)
                 ]
             )

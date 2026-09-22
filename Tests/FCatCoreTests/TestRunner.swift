@@ -26,6 +26,7 @@ struct FCatCoreTestRunner {
         try testInsertedItemPersistsAcrossStoreInstances()
         try testDuplicateHashUpdatesExistingItemInsteadOfInserting()
         try testDuplicateHashPreservesOriginalSourceApplication()
+        try testDuplicateHashPreservesFavoriteState()
         try testNonFavoriteHistoryIsCappedAtFiveHundred()
         try testFavoritesAreNotRemovedByHistoryCap()
         try testNonFavoriteImageCountIsCappedAtOneHundred()
@@ -229,6 +230,18 @@ struct FCatCoreTestRunner {
         try store.upsert(makeItem(title: "Second", hash: "same-source", sourceAppName: "FCat"))
         let sourceAppName = try store.fetchAll().first?.sourceAppName
         try expect(sourceAppName == "Safari", "duplicate preserves original source application")
+    }
+
+    static func testDuplicateHashPreservesFavoriteState() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try makeStore(directory: directory)
+        let favorite = makeItem(title: "Favorite", favorite: true, hash: "same-favorite")
+        let recaptured = makeItem(title: "Recaptured", favorite: false, hash: "same-favorite")
+        try store.upsert(favorite)
+        try store.upsert(recaptured)
+        let item = try store.fetchAll().first
+        try expect(item?.isFavorite == true, "duplicate preserves favorite state")
     }
 
     static func testNonFavoriteHistoryIsCappedAtFiveHundred() throws {
