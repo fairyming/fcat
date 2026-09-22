@@ -36,6 +36,62 @@ final class BorderlessWindow: NSPanel {
     }
 }
 
+private func statusBarCatImage() -> NSImage {
+    let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+        NSColor.black.setFill()
+        NSColor.black.setStroke()
+
+        let head = NSBezierPath()
+        head.move(to: NSPoint(x: 2.5, y: 10.5))
+        head.line(to: NSPoint(x: 2.1, y: 16.6))
+        head.line(to: NSPoint(x: 6.2, y: 14.1))
+        head.curve(
+            to: NSPoint(x: 11.8, y: 14.1),
+            controlPoint1: NSPoint(x: 7.8, y: 14.8),
+            controlPoint2: NSPoint(x: 10.2, y: 14.8)
+        )
+        head.line(to: NSPoint(x: 15.9, y: 16.6))
+        head.line(to: NSPoint(x: 15.5, y: 10.5))
+        head.curve(
+            to: NSPoint(x: 9, y: 2.2),
+            controlPoint1: NSPoint(x: 17.2, y: 5.8),
+            controlPoint2: NSPoint(x: 13.5, y: 2.2)
+        )
+        head.curve(
+            to: NSPoint(x: 2.5, y: 10.5),
+            controlPoint1: NSPoint(x: 4.5, y: 2.2),
+            controlPoint2: NSPoint(x: 0.8, y: 5.8)
+        )
+        head.close()
+        head.fill()
+
+        // Cut friendly eyes and a tiny muzzle out of the template silhouette.
+        NSGraphicsContext.current?.compositingOperation = .clear
+        NSBezierPath(ovalIn: NSRect(x: 5.1, y: 8.2, width: 1.8, height: 2.5)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 11.1, y: 8.2, width: 1.8, height: 2.5)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 8.25, y: 5.6, width: 1.5, height: 1.1)).fill()
+        NSGraphicsContext.current?.compositingOperation = .sourceOver
+
+        // Short whiskers remain legible at menu-bar size.
+        let whiskers = NSBezierPath()
+        whiskers.lineWidth = 0.8
+        whiskers.lineCapStyle = .round
+        whiskers.move(to: NSPoint(x: 3.7, y: 6.9))
+        whiskers.line(to: NSPoint(x: 0.6, y: 7.7))
+        whiskers.move(to: NSPoint(x: 3.6, y: 5.7))
+        whiskers.line(to: NSPoint(x: 0.5, y: 5.2))
+        whiskers.move(to: NSPoint(x: 14.3, y: 6.9))
+        whiskers.line(to: NSPoint(x: 17.4, y: 7.7))
+        whiskers.move(to: NSPoint(x: 14.4, y: 5.7))
+        whiskers.line(to: NSPoint(x: 17.5, y: 5.2))
+        whiskers.stroke()
+        return true
+    }
+    image.isTemplate = true
+    image.accessibilityDescription = "FCat"
+    return image
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var historyWindow: NSWindow?
@@ -109,8 +165,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func createStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "F"
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = item.button {
+            button.image = statusBarCatImage()
+            button.imagePosition = .imageOnly
+            button.setAccessibilityLabel("FCat Clipboard History")
+        }
 
         let menu = NSMenu()
         let openHistoryItem = NSMenuItem(title: "Open History", action: #selector(openHistory), keyEquivalent: "")
