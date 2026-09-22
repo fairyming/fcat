@@ -20,7 +20,6 @@ public enum SearchService {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedQuery.isEmpty {
             return filtered.sorted { lhs, rhs in
-                if lhs.isFavorite != rhs.isFavorite { return lhs.isFavorite && !rhs.isFavorite }
                 if lhs.lastUsedAt != rhs.lastUsedAt { return lhs.lastUsedAt > rhs.lastUsedAt }
                 return lhs.createdAt > rhs.createdAt
             }
@@ -33,7 +32,6 @@ public enum SearchService {
             return (item, score)
         }
         .sorted { lhs, rhs in
-            if lhs.0.isFavorite != rhs.0.isFavorite { return lhs.0.isFavorite && !rhs.0.isFavorite }
             if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
             if lhs.0.lastUsedAt != rhs.0.lastUsedAt { return lhs.0.lastUsedAt > rhs.0.lastUsedAt }
             return lhs.0.createdAt > rhs.0.createdAt

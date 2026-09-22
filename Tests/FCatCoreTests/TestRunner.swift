@@ -21,7 +21,7 @@ struct FCatCoreTestRunner {
         try testSearchFiltersFavoritesCategory()
         try testSearchFiltersImagesCategory()
         try testSearchFiltersTextsCategory()
-        try testFavoritesSortBeforeNonFavoritesForSearch()
+        try testFavoritesDoNotAffectClipboardOrder()
         try testTitleMatchBeatsBodyMatch()
         try testInsertedItemPersistsAcrossStoreInstances()
         try testDuplicateHashUpdatesExistingItemInsteadOfInserting()
@@ -181,13 +181,15 @@ struct FCatCoreTestRunner {
         try expect(results.map(\.type) == [.text], "texts category filter")
     }
 
-    static func testFavoritesSortBeforeNonFavoritesForSearch() throws {
+    static func testFavoritesDoNotAffectClipboardOrder() throws {
         let items = [
             makeItem(title: "cat normal", favorite: false, lastUsedOffset: 20),
             makeItem(title: "cat favorite", favorite: true, lastUsedOffset: 1)
         ]
-        let results = SearchService.search(items: items, query: "cat", category: .all)
-        try expect(results.first?.previewTitle == "cat favorite", "favorite search priority")
+        let allResults = SearchService.search(items: items, query: "", category: .all)
+        try expect(allResults.first?.previewTitle == "cat normal", "favorite does not affect history order")
+        let searchResults = SearchService.search(items: items, query: "cat", category: .all)
+        try expect(searchResults.first?.previewTitle == "cat normal", "favorite does not affect search order")
     }
 
     static func testTitleMatchBeatsBodyMatch() throws {

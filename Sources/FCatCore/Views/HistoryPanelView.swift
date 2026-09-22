@@ -12,6 +12,45 @@ private func cachedHistoryImage(at path: String) -> NSImage? {
     return image
 }
 
+private struct EfficientTextPreview: NSViewRepresentable {
+    let text: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.drawsBackground = false
+        textView.font = .systemFont(ofSize: 13)
+        textView.textContainerInset = NSSize(width: 16, height: 16)
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(
+            width: 0,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.layoutManager?.allowsNonContiguousLayout = true
+        scrollView.documentView = textView
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView,
+              textView.string != text else { return }
+        textView.string = text
+        textView.scrollToBeginningOfDocument(nil)
+    }
+}
+
 public enum ClipboardContextAction {
     case copy
     case paste
@@ -159,15 +198,16 @@ public struct HistoryPanelView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                                 .padding(16)
                         } else if let aiResult = viewModel.aiResult {
-                            ScrollView {
-                                Text(aiResult)
-                                    .font(.system(size: 13))
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(16)
-                            }
+                            EfficientTextPreview(text: aiResult)
                         } else {
-                            ScrollView {
+                            if let content = selectedItem.contentText,
+                               selectedItem.type != .image {
+                                VStack(spacing: 0) {
+                                    EfficientTextPreview(text: content)
+                                    sourceFooter(selectedItem.sourceAppName)
+                                }
+                            } else {
+                                ScrollView {
                                 VStack(alignment: .leading, spacing: 12) {
                                     if selectedItem.type == .image, let assetPath = selectedItem.assetPath {
                                         if let image = cachedHistoryImage(at: assetPath) {
@@ -183,27 +223,15 @@ public struct HistoryPanelView: View {
                                             Text("Image not found")
                                                 .foregroundStyle(.secondary)
                                         }
-                                    } else if let content = selectedItem.contentText {
-                                        Text(content)
-                                            .font(.system(size: 13))
-                                            .textSelection(.enabled)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
                                     } else {
                                         Text("No content")
                                             .foregroundStyle(.secondary)
                                     }
 
-                                    if let source = selectedItem.sourceAppName {
-                                        HStack {
-                                            Text("Source:")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                            Text(source)
-                                                .font(.caption)
-                                        }
-                                    }
+                                    sourceFooter(selectedItem.sourceAppName)
                                 }
                                 .padding(16)
+                                }
                             }
                         }
                     }
@@ -239,6 +267,22 @@ public struct HistoryPanelView: View {
         .onAppear { searchFocused = true; installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
         .onChange(of: viewModel.selectedItem?.id) { _ in selectedActionIndex = 0 }
+    }
+
+    @ViewBuilder
+    private func sourceFooter(_ source: String?) -> some View {
+        if let source {
+            HStack {
+                Text("Source:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(source)
+                    .font(.caption)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
     }
 
     private func installKeyMonitor() {
