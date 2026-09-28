@@ -1,5 +1,13 @@
 import AppKit
 
+private final class DraggableImageView: NSImageView {
+    override func mouseDown(with event: NSEvent) {
+        // Let AppKit handle the normal drag threshold and move the containing
+        // window once the user holds and moves on the image itself.
+        window?.performDrag(with: event)
+    }
+}
+
 final class PinnedImageWindowController: NSWindowController, NSWindowDelegate {
     let id = UUID()
     var onClose: ((UUID) -> Void)?
@@ -8,7 +16,7 @@ final class PinnedImageWindowController: NSWindowController, NSWindowDelegate {
         guard let image = NSImage(contentsOfFile: imagePath) else { return nil }
 
         let size = Self.initialSize(for: image.size)
-        let imageView = NSImageView(frame: NSRect(origin: .zero, size: size))
+        let imageView = DraggableImageView(frame: NSRect(origin: .zero, size: size))
         imageView.image = image
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.imageAlignment = .alignCenter
