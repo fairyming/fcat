@@ -541,21 +541,28 @@ struct FCatCoreTestRunner {
     }
 
     static func runAsync(_ operation: @escaping () async throws -> Void) throws {
-        var isFinished = false
-        var capturedError: Error?
+        // The task may execute concurrently with the polling loop. Keep the
+        // shared state in a reference type so Swift's strict concurrency
+        // checking does not reject mutation of captured local variables.
+        final class AsyncState: @unchecked Sendable {
+            var isFinished = false
+            var capturedError: Error?
+        }
+
+        let state = AsyncState()
         Task {
             do { try await operation() }
-            catch { capturedError = error }
-            isFinished = true
+            catch { state.capturedError = error }
+            state.isFinished = true
         }
 
         let deadline = Date(timeIntervalSinceNow: 10)
-        while !isFinished && Date() < deadline {
+        while !state.isFinished && Date() < deadline {
             RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
         }
 
-        try expect(isFinished, "async test timed out")
-        if let capturedError { throw capturedError }
+        try expect(state.isFinished, "async test timed out")
+        if let capturedError = state.capturedError { throw capturedError }
     }
 
     static func awaitTestAIServiceBuildsOpenAICompatibleRequest() throws {
