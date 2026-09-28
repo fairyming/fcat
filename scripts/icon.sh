@@ -14,38 +14,19 @@ echo "=== 生成 ICNS 图标 ==="
 CONVERT_CMD=""
 if command -v rsvg-convert &>/dev/null; then
     CONVERT_CMD="rsvg-convert"
-elif command -v qlmanage &>/dev/null; then
-    CONVERT_CMD="qlmanage"
 elif python3 -c "import cairosvg" 2>/dev/null; then
     CONVERT_CMD="cairosvg"
 else
-    echo "警告：未找到 SVG 转换工具，尝试安装..."
-    echo "  brew install librsvg   (推荐，提供 rsvg-convert)"
-    echo "  pip3 install cairosvg   (备选)"
-    echo ""
-    echo "正在尝试使用 qlmanage (macOS 内置)..."
-
-    # 使用 qlmanage 生成临时 PNG
-    TMP_DIR="$PROJECT_DIR/.build/icon_tmp"
-    rm -rf "$TMP_DIR"
-    mkdir -p "$TMP_DIR"
-    qlmanage -t -s 1024 -o "$TMP_DIR" "$SVG_PATH" 2>/dev/null || true
-
-    # qlmanage 输出文件名带有扩展名
-    QL_OUTPUT="$TMP_DIR/icon.svg.png"
-    if [ ! -f "$QL_OUTPUT" ]; then
-        # 尝试查找 qlmanage 生成的任何 png
-        QL_OUTPUT=$(find "$TMP_DIR" -name "*.png" -type f | head -1)
+    echo "未找到 SVG 转换工具，尝试安装 librsvg..."
+    if command -v brew &>/dev/null; then
+        brew install librsvg
     fi
-
-    if [ -z "$QL_OUTPUT" ] || [ ! -f "$QL_OUTPUT" ]; then
-        echo "错误：无法转换 SVG，请安装转换工具："
-        echo "  brew install librsvg"
+    if command -v rsvg-convert &>/dev/null; then
+        CONVERT_CMD="rsvg-convert"
+    else
+        echo "错误：需要 rsvg-convert（由 librsvg 提供）来生成图标"
         exit 1
     fi
-
-    CONVERT_CMD="qlmanage_done"
-    BASE_PNG="$QL_OUTPUT"
 fi
 
 # 2. 生成基础 1024x1024 PNG
@@ -58,10 +39,6 @@ if [ "$CONVERT_CMD" = "rsvg-convert" ]; then
     rsvg-convert -w 1024 -h 1024 "$SVG_PATH" > "$BASE_PNG"
 elif [ "$CONVERT_CMD" = "cairosvg" ]; then
     python3 -c "import cairosvg; cairosvg.svg2png(url='$SVG_PATH', write_to='$BASE_PNG', output_width=1024, output_height=1024)"
-elif [ "$CONVERT_CMD" = "qlmanage_done" ]; then
-    # 已在上面生成
-    cp "$QL_OUTPUT" "$BASE_PNG"
-    rm -rf "$PROJECT_DIR/.build/icon_tmp"
 fi
 
 if [ ! -s "$BASE_PNG" ]; then
