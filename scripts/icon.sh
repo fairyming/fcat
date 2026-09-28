@@ -64,6 +64,12 @@ elif [ "$CONVERT_CMD" = "qlmanage_done" ]; then
     rm -rf "$PROJECT_DIR/.build/icon_tmp"
 fi
 
+if [ ! -s "$BASE_PNG" ]; then
+    echo "错误：SVG 转 PNG 未生成基础图标：$BASE_PNG"
+    echo "转换器：${CONVERT_CMD:-none}"
+    exit 1
+fi
+
 # 3. 从 1024 PNG 生成各尺寸图标。某些 macOS runner 上 sips 对输出
 # 参数的处理不稳定；失败时保留一份有效 PNG，让后面的 ICNS 回退仍可用。
 resize_icon() {
@@ -71,6 +77,10 @@ resize_icon() {
     local output="$2"
     if ! sips -s format png -z "$size" "$size" "$BASE_PNG" --out "$output" &>/dev/null; then
         cp "$BASE_PNG" "$output"
+    fi
+    if [ ! -s "$output" ]; then
+        echo "错误：无法生成图标文件：$output"
+        exit 1
     fi
 }
 
@@ -87,7 +97,8 @@ resize_icon 1024 "$ICONSET_DIR/icon_512x512@2x.png"
 
 # 4. 直接使用标准 ICNS PNG chunk 生成 .icns。
 # GitHub macOS runner 上的 iconutil 可能失败并清空 iconset，因此不依赖它。
-test -f "$BASE_PNG"
+mkdir -p "$(dirname "$ICNS_PATH")"
+test -s "$BASE_PNG"
 python3 - "$ICONSET_DIR" "$ICNS_PATH" <<'PY'
 import pathlib
 import struct
