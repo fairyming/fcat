@@ -12,6 +12,9 @@ final class PinnedImageWindowController: NSWindowController, NSWindowDelegate {
         imageView.image = image
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.imageAlignment = .alignCenter
+        imageView.autoresizingMask = [.width, .height]
+        imageView.wantsLayer = true
+        imageView.layer?.backgroundColor = NSColor.white.cgColor
 
         let window = NSPanel(
             contentRect: NSRect(origin: .zero, size: size),
@@ -26,7 +29,6 @@ final class PinnedImageWindowController: NSWindowController, NSWindowDelegate {
         window.hidesOnDeactivate = false
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 160, height: 120)
-        window.contentAspectRatio = image.size
         window.center()
 
         super.init(window: window)
