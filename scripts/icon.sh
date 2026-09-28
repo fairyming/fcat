@@ -64,17 +64,26 @@ elif [ "$CONVERT_CMD" = "qlmanage_done" ]; then
     rm -rf "$PROJECT_DIR/.build/icon_tmp"
 fi
 
-# 3. 从 1024 PNG 生成各尺寸图标
-sips -z 16 16     "$BASE_PNG" --out "$ICONSET_DIR/icon_16x16.png"         -s format png &>/dev/null
-sips -z 32 32     "$BASE_PNG" --out "$ICONSET_DIR/icon_16x16@2x.png"      -s format png &>/dev/null
-sips -z 32 32     "$BASE_PNG" --out "$ICONSET_DIR/icon_32x32.png"         -s format png &>/dev/null
-sips -z 64 64     "$BASE_PNG" --out "$ICONSET_DIR/icon_32x32@2x.png"      -s format png &>/dev/null
-sips -z 128 128   "$BASE_PNG" --out "$ICONSET_DIR/icon_128x128.png"       -s format png &>/dev/null
-sips -z 256 256   "$BASE_PNG" --out "$ICONSET_DIR/icon_128x128@2x.png"    -s format png &>/dev/null
-sips -z 256 256   "$BASE_PNG" --out "$ICONSET_DIR/icon_256x256.png"       -s format png &>/dev/null
-sips -z 512 512   "$BASE_PNG" --out "$ICONSET_DIR/icon_256x256@2x.png"    -s format png &>/dev/null
-sips -z 512 512   "$BASE_PNG" --out "$ICONSET_DIR/icon_512x512.png"       -s format png &>/dev/null
-sips -z 1024 1024 "$BASE_PNG" --out "$ICONSET_DIR/icon_512x512@2x.png"    -s format png &>/dev/null
+# 3. 从 1024 PNG 生成各尺寸图标。某些 macOS runner 上 sips 对输出
+# 参数的处理不稳定；失败时保留一份有效 PNG，让后面的 ICNS 回退仍可用。
+resize_icon() {
+    local size="$1"
+    local output="$2"
+    if ! sips -s format png -z "$size" "$size" "$BASE_PNG" --out "$output" &>/dev/null; then
+        cp "$BASE_PNG" "$output"
+    fi
+}
+
+resize_icon 16   "$ICONSET_DIR/icon_16x16.png"
+resize_icon 32   "$ICONSET_DIR/icon_16x16@2x.png"
+resize_icon 32   "$ICONSET_DIR/icon_32x32.png"
+resize_icon 64   "$ICONSET_DIR/icon_32x32@2x.png"
+resize_icon 128  "$ICONSET_DIR/icon_128x128.png"
+resize_icon 256  "$ICONSET_DIR/icon_128x128@2x.png"
+resize_icon 256  "$ICONSET_DIR/icon_256x256.png"
+resize_icon 512  "$ICONSET_DIR/icon_256x256@2x.png"
+resize_icon 512  "$ICONSET_DIR/icon_512x512.png"
+resize_icon 1024 "$ICONSET_DIR/icon_512x512@2x.png"
 
 # 4. 使用 iconutil 生成 .icns。部分新版 Command Line Tools 的
 # iconutil 无法重新打包其自己解出的 iconset，因此提供标准 ICNS
