@@ -341,6 +341,16 @@ public struct HistoryPanelView: View {
                 return nil
             }
 
+            // Left/right switch the clipboard category tabs.
+            if keyCode == kVK_LeftArrow {
+                viewModel.moveCategory(delta: -1)
+                return nil
+            }
+            if keyCode == kVK_RightArrow {
+                viewModel.moveCategory(delta: 1)
+                return nil
+            }
+
             // Cmd+C copies AI result
             if viewModel.aiResult != nil && keyCode == kVK_ANSI_C && modifiers.contains(.command) {
                 try? viewModel.copyAIResult()

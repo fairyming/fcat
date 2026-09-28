@@ -92,6 +92,14 @@ public final class HistoryPanelViewModel: ObservableObject {
         }
     }
 
+    public func moveCategory(delta: Int) {
+        let categories = ClipboardCategory.allCases
+        guard let current = categories.firstIndex(of: category) else { return }
+        let next = min(max(current + delta, 0), categories.count - 1)
+        guard next != current else { return }
+        category = categories[next]
+    }
+
     public func copySelected() throws {
         guard visibleItems.indices.contains(selectedIndex) else { return }
         try pasteboard.write(visibleItems[selectedIndex])
