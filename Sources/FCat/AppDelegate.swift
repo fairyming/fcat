@@ -116,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let support = try appSupportDirectory()
             let assetStore = try ImageAssetStore(directory: support.appendingPathComponent("Images", isDirectory: true))
-            let store = try ClipboardStore(databaseURL: support.appendingPathComponent("history.sqlite"))
+            let store = try ClipboardStore(databaseURL: support.appendingPathComponent("history.sqlite"), historyCountLimit: settingsViewModel.historyCountLimit)
             let pasteboard = SystemPasteboardClient()
             self.store = store
             self.pasteboard = pasteboard
@@ -265,14 +265,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func doOpenSettings() {
-        let view = SettingsView(viewModel: settingsViewModel) { [weak self] hotKey in
+        let view = SettingsView(viewModel: settingsViewModel, saveHotKey: { [weak self] hotKey in
             if hotKey.keyCode == 0 && hotKey.modifiers == 0 {
                 self?.hotKeyManager.unregister()
             } else {
                 do { try self?.register(hotKey) }
                 catch { self?.showError("Shortcut registration failed. Choose another shortcut.") }
             }
-        }
+        }, saveHistoryCountLimit: { [weak self] limit in
+            try? self?.store?.setHistoryCountLimit(limit)
+        })
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 460), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.contentView = NSHostingView(rootView: view)
         window.title = "FCat Settings"

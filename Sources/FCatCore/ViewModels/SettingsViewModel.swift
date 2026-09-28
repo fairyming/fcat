@@ -11,9 +11,11 @@ public final class SettingsViewModel: ObservableObject {
     @Published public var aiTimeoutSeconds: Double
     @Published public var aiMaxTokens: Int
     @Published public var aiSettingsMessage: String?
+    @Published public var historyCountLimit: Int
     private let defaults: UserDefaults
     private let key = "FCat.hotKey"
     private let aiSettingsStore: AISettingsStore
+    private let historyCountKey = "FCat.historyCountLimit"
 
     public init(defaults: UserDefaults = .standard, aiSettingsStore: AISettingsStore = AISettingsStore()) {
         self.defaults = defaults
@@ -27,6 +29,7 @@ public final class SettingsViewModel: ObservableObject {
         self.aiDefaultLanguage = ai.defaultLanguage
         self.aiTimeoutSeconds = ai.timeoutSeconds
         self.aiMaxTokens = ai.maxTokens
+        self.historyCountLimit = max(1, defaults.object(forKey: historyCountKey) as? Int ?? 500)
     }
 
     public var hasHotKey: Bool { hotKey != nil }
@@ -53,6 +56,11 @@ public final class SettingsViewModel: ObservableObject {
         aiSettingsStore.save(provider: aiProvider, baseURL: aiBaseURL, model: aiModel, defaultLanguage: aiDefaultLanguage, timeoutSeconds: aiTimeoutSeconds, maxTokens: aiMaxTokens)
         aiSettingsStore.saveAPIKey(aiAPIKey)
         aiSettingsMessage = "AI settings saved"
+    }
+
+    public func saveHistoryCountLimit() {
+        historyCountLimit = max(1, historyCountLimit)
+        defaults.set(historyCountLimit, forKey: historyCountKey)
     }
 
     private static func load(defaults: UserDefaults, key: String) -> HotKey? {

@@ -2,21 +2,29 @@ import Foundation
 
 public final class ClipboardStore {
     private let database: SQLiteDatabase
+    private var historyCountLimit: Int
     private let imageCountLimit: Int
     private let imageByteLimit: Int64
     private let fileManager: FileManager
 
     public init(
         databaseURL: URL,
+        historyCountLimit: Int = 500,
         imageCountLimit: Int = 100,
         imageByteLimit: Int64 = 500 * 1024 * 1024,
         fileManager: FileManager = .default
     ) throws {
         self.database = try SQLiteDatabase(url: databaseURL)
+        self.historyCountLimit = max(1, historyCountLimit)
         self.imageCountLimit = imageCountLimit
         self.imageByteLimit = imageByteLimit
         self.fileManager = fileManager
         try migrate()
+    }
+
+    public func setHistoryCountLimit(_ limit: Int) throws {
+        historyCountLimit = max(1, limit)
+        try enforceRetention()
     }
 
     public func upsert(_ item: ClipboardItem) throws {
@@ -103,7 +111,7 @@ public final class ClipboardStore {
 
     private func enforceRetention() throws {
         var nonFavorites = try fetchAll().filter { !$0.isFavorite }.sorted { $0.createdAt < $1.createdAt }
-        while nonFavorites.count > 500, let first = nonFavorites.first {
+        while nonFavorites.count > historyCountLimit, let first = nonFavorites.first {
             try delete(id: first.id)
             nonFavorites.removeFirst()
         }

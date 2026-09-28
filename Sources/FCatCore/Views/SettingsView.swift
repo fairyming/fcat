@@ -16,10 +16,12 @@ public struct SettingsView: View {
     @ObservedObject private var viewModel: SettingsViewModel
     @State private var selectedTab: SettingsTab = .shortcut
     private let saveHotKey: (HotKey) -> Void
+    private let saveHistoryCountLimit: (Int) -> Void
 
-    public init(viewModel: SettingsViewModel, saveHotKey: @escaping (HotKey) -> Void) {
+    public init(viewModel: SettingsViewModel, saveHotKey: @escaping (HotKey) -> Void, saveHistoryCountLimit: @escaping (Int) -> Void = { _ in }) {
         self.viewModel = viewModel
         self.saveHotKey = saveHotKey
+        self.saveHistoryCountLimit = saveHistoryCountLimit
     }
 
     public var body: some View {
@@ -38,7 +40,7 @@ public struct SettingsView: View {
 
             switch selectedTab {
             case .shortcut:
-                ShortcutSettingsView(viewModel: viewModel, saveHotKey: saveHotKey)
+                ShortcutSettingsView(viewModel: viewModel, saveHotKey: saveHotKey, saveHistoryCountLimit: saveHistoryCountLimit)
             case .ai:
                 AISettingsView(viewModel: viewModel)
             }

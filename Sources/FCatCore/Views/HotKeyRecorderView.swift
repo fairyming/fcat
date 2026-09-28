@@ -61,10 +61,12 @@ public struct ShortcutSettingsView: View {
     @ObservedObject private var viewModel: SettingsViewModel
     @StateObject private var recorder = HotKeyRecorderMonitor()
     private let saveHotKey: (HotKey) -> Void
+    private let saveHistoryCountLimit: (Int) -> Void
 
-    public init(viewModel: SettingsViewModel, saveHotKey: @escaping (HotKey) -> Void) {
+    public init(viewModel: SettingsViewModel, saveHotKey: @escaping (HotKey) -> Void, saveHistoryCountLimit: @escaping (Int) -> Void = { _ in }) {
         self.viewModel = viewModel
         self.saveHotKey = saveHotKey
+        self.saveHistoryCountLimit = saveHistoryCountLimit
     }
 
     public var body: some View {
@@ -94,6 +96,17 @@ public struct ShortcutSettingsView: View {
                         saveHotKey(HotKey(keyCode: 0, modifiers: 0))
                     }
                     .controlSize(.small)
+                }
+            }
+
+            HStack {
+                Text("Maximum history items")
+                Spacer()
+                TextField("500", value: $viewModel.historyCountLimit, format: .number)
+                    .frame(width: 90)
+                Button("Save") {
+                    viewModel.saveHistoryCountLimit()
+                    saveHistoryCountLimit(viewModel.historyCountLimit)
                 }
             }
 
