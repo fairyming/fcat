@@ -89,6 +89,18 @@ resize_icon 1024 "$ICONSET_DIR/icon_512x512@2x.png"
 # iconutil 无法重新打包其自己解出的 iconset，因此提供标准 ICNS
 # PNG chunk 作为兼容回退。
 if ! iconutil -c icns "$ICONSET_DIR" -o "$ICNS_PATH"; then
+    # iconutil 在部分 runner 上失败时会清空 iconset；重新补齐文件后
+    # 再使用标准 PNG chunk 回退生成 ICNS。
+    for spec in \
+        "icon_16x16.png" "icon_16x16@2x.png" \
+        "icon_32x32.png" "icon_32x32@2x.png" \
+        "icon_128x128.png" "icon_128x128@2x.png" \
+        "icon_256x256.png" "icon_256x256@2x.png" \
+        "icon_512x512.png" "icon_512x512@2x.png"; do
+        if [ ! -f "$ICONSET_DIR/$spec" ]; then
+            cp "$BASE_PNG" "$ICONSET_DIR/$spec"
+        fi
+    done
     python3 - "$ICONSET_DIR" "$ICNS_PATH" <<'PY'
 import pathlib
 import struct
