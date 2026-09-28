@@ -229,7 +229,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         positionHistoryWindow(window)
         historyWindow = window
-        focusHistoryWindow(window)
+        // Let NSHostingView finish mounting its AppKit-backed List before
+        // changing key-window state. Calling makeKey synchronously here can
+        // re-enter NSTableView while SwiftUI is still building its delegate.
+        DispatchQueue.main.async { [weak self, weak window] in
+            guard let self, let window else { return }
+            self.focusHistoryWindow(window)
+        }
     }
 
     private func focusHistoryWindow(_ window: NSWindow) {

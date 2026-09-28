@@ -149,7 +149,9 @@ public struct HistoryPanelView: View {
             HSplitView {
                 // Left: item list
                 ScrollViewReader { scrollProxy in
-                    List(Array(viewModel.visibleItems.enumerated()), id: \.element.id) { index, item in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(viewModel.visibleItems.enumerated()), id: \.element.id) { index, item in
                         HStack(spacing: 8) {
                             Text(icon(for: item))
                                 .font(.caption)
@@ -168,17 +170,30 @@ public struct HistoryPanelView: View {
                         .padding(.horizontal, 6)
                         .background(index == viewModel.selectedIndex ? Color.accentColor.opacity(0.18) : Color.clear)
                         .contentShape(Rectangle())
-                        .id(index)
-                        .onTapGesture { viewModel.select(index: index) }
+                                .onTapGesture {
+                            // Defer selection until NSTableView finishes its own
+                            // delegate event, avoiding a reentrant table update.
+                            DispatchQueue.main.async {
+                                viewModel.select(index: index)
+                            }
+                        }
+                            }
+                        }
                     }
-                    .id(viewModel.category)
                     .transaction { transaction in
                         transaction.animation = nil
                     }
                     .frame(minWidth: 220)
                     .onChange(of: viewModel.selectedIndex) { newIndex in
-                        withAnimation(.easeInOut(duration: 0.12)) {
-                            scrollProxy.scrollTo(newIndex, anchor: .center)
+                        // scrollTo mutates the AppKit-backed NSTableView. Defer it
+                        // to the next run-loop turn so it cannot run inside a
+                        // table delegate callback.
+                        DispatchQueue.main.async {
+                            guard viewModel.visibleItems.indices.contains(newIndex) else { return }
+                            let itemID = viewModel.visibleItems[newIndex].id
+                            withAnimation(.easeInOut(duration: 0.12)) {
+                                scrollProxy.scrollTo(itemID, anchor: .center)
+                            }
                         }
                     }
                 }
@@ -264,7 +279,14 @@ public struct HistoryPanelView: View {
         .frame(width: 700, height: 520)
         .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.windowBackgroundColor)))
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .onAppear { searchFocused = true; installKeyMonitor() }
+        .onAppear {
+            installKeyMonitor()
+            // Defer focus until the hosting view and its List have completed
+            // their initial AppKit layout/delegate setup.
+            DispatchQueue.main.async {
+                searchFocused = true
+            }
+        }
         .onDisappear { removeKeyMonitor() }
         .onChange(of: viewModel.selectedItem?.id) { _ in selectedActionIndex = 0 }
     }
@@ -308,7 +330,9 @@ public struct HistoryPanelView: View {
 
             if modifiers.contains(.control),
                let category = categoryShortcut(for: keyCode) {
-                viewModel.category = category
+                DispatchQueue.main.async {
+                    viewModel.category = category
+                }
                 return nil
             }
 
@@ -343,11 +367,15 @@ public struct HistoryPanelView: View {
 
             // Left/right switch the clipboard category tabs.
             if keyCode == kVK_LeftArrow {
-                viewModel.moveCategory(delta: -1)
+                DispatchQueue.main.async {
+                    viewModel.moveCategory(delta: -1)
+                }
                 return nil
             }
             if keyCode == kVK_RightArrow {
-                viewModel.moveCategory(delta: 1)
+                DispatchQueue.main.async {
+                    viewModel.moveCategory(delta: 1)
+                }
                 return nil
             }
 

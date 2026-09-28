@@ -9,38 +9,30 @@ import CoreGraphics
 #endif
 
 public final class HistoryPanelViewModel: ObservableObject {
-    private var storedQuery = ""
-    public var query: String {
-        get { storedQuery }
-        set {
-            guard newValue != storedQuery else { return }
-            objectWillChange.send()
-            storedQuery = newValue
+    @Published public var query = "" {
+        didSet {
+            guard query != oldValue else { return }
             refreshVisibleItems()
             if selectedIndex != 0 { selectedIndex = 0 }
             clearAIOutput()
         }
     }
 
-    private var storedCategory: ClipboardCategory = .all
-    public var category: ClipboardCategory {
-        get { storedCategory }
-        set {
-            guard newValue != storedCategory else { return }
-            objectWillChange.send()
-            storedCategory = newValue
+    @Published public var category: ClipboardCategory = .all {
+        didSet {
+            guard category != oldValue else { return }
             refreshVisibleItems()
             if selectedIndex != 0 { selectedIndex = 0 }
             clearAIOutput()
         }
     }
-    public private(set) var selectedIndex: Int = 0
+    @Published public private(set) var selectedIndex: Int = 0
     @Published public var actionsVisible: Bool = false
     @Published public var selectedAIActionIndex: Int = 0
     @Published public var aiLoading: Bool = false
     @Published public var aiResult: String?
     @Published public var aiError: String?
-    public private(set) var visibleItems: [ClipboardItem] = []
+    @Published public private(set) var visibleItems: [ClipboardItem] = []
 
     private let store: HistoryStore
     private let pasteboard: PasteboardClient
@@ -58,7 +50,7 @@ public final class HistoryPanelViewModel: ObservableObject {
         self.pasteboard = pasteboard
         self.aiService = aiService
         self.aiSettingsStore = aiSettingsStore
-        reloadItems(selecting: nil, notify: false)
+        reloadItems(selecting: nil)
     }
 
     public var aiActions: [AIAction] { AIAction.builtIn }
@@ -76,7 +68,6 @@ public final class HistoryPanelViewModel: ObservableObject {
         let maxIndex = max(visibleItems.count - 1, 0)
         let newIndex = min(max(selectedIndex + delta, 0), maxIndex)
         if newIndex != selectedIndex {
-            objectWillChange.send()
             selectedIndex = newIndex
             clearAIOutput()
         }
@@ -86,7 +77,6 @@ public final class HistoryPanelViewModel: ObservableObject {
         let maxIndex = max(visibleItems.count - 1, 0)
         let newIndex = min(max(index, 0), maxIndex)
         if newIndex != selectedIndex {
-            objectWillChange.send()
             selectedIndex = newIndex
             clearAIOutput()
         }
@@ -213,8 +203,7 @@ public final class HistoryPanelViewModel: ObservableObject {
         reloadItems(selecting: selectedItem?.id)
     }
 
-    private func reloadItems(selecting selectedID: UUID? = nil, notify: Bool = true) {
-        if notify { objectWillChange.send() }
+    private func reloadItems(selecting selectedID: UUID? = nil) {
         allItems = (try? store.fetchAll()) ?? []
         refreshVisibleItems()
         if let selectedID,
